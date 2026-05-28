@@ -1,0 +1,24 @@
+# Core dependencies for the Polyglot TTS/STT Application
+numpy>=1.22.0
+scipy>=1.10.0
+soundfile>=0.12.0
+sounddevice>=0.4.0
+pygame>=2.5.0
+SpeechRecognition>=3.10.0
+requests>=2.31.0
+openai>=1.0.0
+edge-tts>=6.1.0
+pykakasi>=2.2.0
+kokoro-onnx>=0.3.0
+misaki>=0.9.0
+piper-tts>=1.2.0
+
+# Japanese TTS dependencies
+pyopenjtalk>=0.3.0
+unidic-lite>=1.0.8
+SudachiPy>=0.6.10
+SudachiDict-core>=20260116
+fugashi>=1.1.0
+jaconv>=0.3.0
+mojimoji>=0.0.13
+Janome>=0.5.0

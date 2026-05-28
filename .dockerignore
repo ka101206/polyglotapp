@@ -1,0 +1,10 @@
+ai_env/
+__pycache__/
+*.wav
+*.onnx
+*.bin
+models/
+credentials_config.py
+.git
+.vscode
+.DS_Store

@@ -1,0 +1,13 @@
+version: "3.8"
+services:
+  polyglot-tts:
+    build: .
+    image: polyglot-tts:latest
+    container_name: polyglot-tts-app
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+    # Ensure Docker doesn't try to use native audio devices on Mac to prevent crashes
+    environment:
+      - SDL_AUDIODRIVER=dummy
