@@ -43,7 +43,17 @@ Navigate to: **http://localhost:8080/vnc.html**
 
 The app auto-connects and scales to fit your browser window. No need to click "Connect".
 
-### 4. Typing in Other Languages
+### 4. Remote Access (Share with others)
+
+Because the app routes all traffic (VNC, Audio, IME) through a single port (`8080`) via an internal Nginx proxy, you can easily share it over the internet using a tunneling service.
+
+The easiest way is using `localtunnel` (requires Node.js):
+```bash
+npx localtunnel --port 8080
+```
+This will generate a public URL (e.g., `https://random-words.loca.lt`) that anyone can open in their browser to use the application remotely.
+
+### 5. Typing in Other Languages
 
 To type in Japanese, Chinese, Korean, etc.:
 1. Switch your Mac's input source (e.g., via the menu bar or keyboard shortcut)
