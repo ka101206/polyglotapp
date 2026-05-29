@@ -1,9 +1,10 @@
-import pygame
+import os
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, scrolledtext
 import threading
 import time
 import re
+import subprocess
 
 from ai_client import AIClient
 from formatter import TextFormatter
@@ -87,18 +88,23 @@ class PolyglotApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Polyglot AI Tutor")
-        self.root.geometry("1000x700")
+        self.root.geometry("1000x650")
 
-        if not pygame.mixer.get_init():
-            pygame.mixer.init()
+
         
         self.ai = AIClient()
         self.dict_client = DictionaryClient()
         self.formatter = TextFormatter()
-        self.ja_tts = TTSEngine()
-        self.euro_tts = EuropeanTTSEngine()
-        self.zh_tts = ChineseTTSEngine()
-        self.ko_tts = KoreanTTSEngine()
+        # Audio playback via browser
+        self._audio_pending_file = None
+        self._audio_done_event = threading.Event()
+        self._audio_lock = threading.Lock()
+        self._composing_preview_len = 0
+
+        self.ja_tts = TTSEngine(audio_player=self.play_audio_in_browser)
+        self.euro_tts = EuropeanTTSEngine(audio_player=self.play_audio_in_browser)
+        self.zh_tts = ChineseTTSEngine(audio_player=self.play_audio_in_browser)
+        self.ko_tts = KoreanTTSEngine(audio_player=self.play_audio_in_browser)
         self.stt = STTEngine()
         
         self.vocabulary_log = {}
@@ -113,6 +119,7 @@ class PolyglotApp:
         # State Tracking
         self.conversation_running = False
         self.partial_replay_mode = False 
+        self.ime_active = False
         self.is_ai_talking = False
         self.is_processing = False
         self.last_spoken_text = "" 
@@ -122,6 +129,7 @@ class PolyglotApp:
         self.mic_sens_var = tk.DoubleVar(value=config.DEFAULT_SENSITIVITY)
         self.talk_speed_var = tk.DoubleVar(value=config.DEFAULT_TTS_SPEED)
         self.replay_speed_var = tk.DoubleVar(value=config.DEFAULT_TTS_SPEED)
+        self.tts_volume_var = tk.DoubleVar(value=1.0)
         
         self.lang_var = tk.StringVar(value="Japanese")
         self.reading_var = tk.StringVar(value="ふりがな")
@@ -132,13 +140,209 @@ class PolyglotApp:
         }
         
         self.setup_ui()
+        self.start_ime_sync_server()
         self.root.after(100, self.show_welcome_help)
 
+    def start_ime_sync_server(self):
+        import http.server
+        import socketserver
+        import json
+        import threading
+        
+        class IMESyncHandler(http.server.BaseHTTPRequestHandler):
+            def do_OPTIONS(self):
+                self.send_response(200)
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
+                self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+                self.end_headers()
+
+            def log_message(self, format, *args):
+                pass  # Suppress HTTP server log spam
+
+            def do_POST(self):
+                content_length = int(self.headers.get('Content-Length', 0))
+                post_data = self.rfile.read(content_length)
+                try:
+                    data = json.loads(post_data.decode('utf-8'))
+                    text = data.get('text', '')
+                    path = self.path
+
+                    if path == '/compose':
+                        # Live preview: update composition preview at end of input field
+                        self.server.app_ref.root.after(0, self.server.app_ref.compose_preview, text)
+                    elif path == '/insert':
+                        # Finalize composition: replace preview with final text
+                        self.server.app_ref.root.after(0, self.server.app_ref.compose_finalize, text)
+                    elif path == '/toggle_grammar':
+                        self.server.app_ref.root.after(0, self.server.app_ref.toggle_grammar_panel)
+                    elif path == '/type':
+                        if text:
+                            self.server.app_ref.root.after(0, self.server.app_ref.insert_and_send, text)
+                    else:
+                        if text:
+                            self.server.app_ref.root.after(0, self.server.app_ref.insert_and_send, text)
+
+                    self.send_response(200)
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(b'{"status": "success"}')
+                except Exception as e:
+                    self.send_response(500)
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(b'{"status": "error"}')
+
+            def do_GET(self):
+                try:
+                    path = self.path
+                    if path == '/toggle_grammar':
+                        self.server.app_ref.root.after(0, self.server.app_ref.toggle_grammar_panel)
+                        self.send_response(200)
+                        self.send_header('Access-Control-Allow-Origin', '*')
+                        self.end_headers()
+                        self.wfile.write(b'{"status": "success"}')
+                    elif path == '/audio/status':
+                        # Return current pending audio file for browser to play
+                        app = self.server.app_ref
+                        pending = app._audio_pending_file
+                        if pending:
+                            self.send_response(200)
+                            self.send_header('Access-Control-Allow-Origin', '*')
+                            self.send_header('Content-Type', 'application/json')
+                            self.end_headers()
+                            import urllib.parse
+                            encoded = urllib.parse.quote(os.path.basename(pending))
+                            volume = app.tts_volume_var.get()
+                            self.wfile.write(f'{{"file": "/audio/file/{encoded}", "volume": {volume}}}'.encode())
+                        else:
+                            self.send_response(200)
+                            self.send_header('Access-Control-Allow-Origin', '*')
+                            self.send_header('Content-Type', 'application/json')
+                            self.end_headers()
+                            self.wfile.write(b'{"file": null}')
+                    elif path.startswith('/audio/file/'):
+                        # Serve the actual audio file
+                        filename = path.split('/audio/file/')[-1]
+                        import urllib.parse
+                        filename = urllib.parse.unquote(filename)
+                        # Security: only serve from working directory
+                        filepath = os.path.join(os.getcwd(), filename)
+                        if os.path.exists(filepath) and os.path.isfile(filepath):
+                            self.send_response(200)
+                            self.send_header('Access-Control-Allow-Origin', '*')
+                            if filepath.endswith('.mp3'):
+                                self.send_header('Content-Type', 'audio/mpeg')
+                            else:
+                                self.send_header('Content-Type', 'audio/wav')
+                            self.send_header('Content-Length', str(os.path.getsize(filepath)))
+                            self.send_header('Cache-Control', 'no-cache')
+                            self.end_headers()
+                            with open(filepath, 'rb') as f:
+                                self.wfile.write(f.read())
+                        else:
+                            self.send_response(404)
+                            self.send_header('Access-Control-Allow-Origin', '*')
+                            self.end_headers()
+                            self.wfile.write(b'{"error": "not found"}')
+                    elif path == '/audio/done':
+                        # Browser finished playing audio
+                        app = self.server.app_ref
+                        app._audio_pending_file = None
+                        app._audio_done_event.set()
+                        self.send_response(200)
+                        self.send_header('Access-Control-Allow-Origin', '*')
+                        self.end_headers()
+                        self.wfile.write(b'{"status": "ok"}')
+                    else:
+                        self.send_response(200)
+                        self.send_header('Access-Control-Allow-Origin', '*')
+                        self.end_headers()
+                        self.wfile.write(b'{"status": "ok"}')
+                except Exception:
+                    self.send_response(500)
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(b'{"status": "error"}')
+
+        def run_server():
+            socketserver.TCPServer.allow_reuse_address = True
+            with socketserver.TCPServer(("", 8081), IMESyncHandler) as httpd:
+                httpd.app_ref = self
+                httpd.serve_forever()
+                
+        threading.Thread(target=run_server, daemon=True).start()
+
+    def play_audio_in_browser(self, filepath):
+        """Queue an audio file for browser playback and block until it finishes."""
+        if not os.path.exists(filepath):
+            print(f"⚠️ Audio file not found: {filepath}")
+            return
+        
+        print(f"🔊 Queuing audio for browser: {filepath}")
+        self._audio_done_event.clear()
+        self._audio_pending_file = filepath
+        
+        # Block until the browser finishes playing (or timeout after 60s)
+        self._audio_done_event.wait(timeout=60.0)
+        print(f"✅ Browser finished playing: {filepath}")
+
+    def insert_and_send(self, text):
+        if not text: return
+        self.input_field.delete(0, "end")
+        self.input_field.insert(0, text)
+        self.send_message()
+
+    def set_input_text(self, text):
+        """Replace input field content entirely."""
+        self.input_field.delete(0, "end")
+        if text:
+            self.input_field.insert(0, text)
+        self._composing_preview_len = 0
+
+    def compose_preview(self, text):
+        """Update the live IME composition preview at the end of the input field."""
+        # Remove previous preview characters from the end
+        if self._composing_preview_len > 0:
+            current = self.input_field.get()
+            base = current[:-self._composing_preview_len]
+            self.input_field.delete(0, "end")
+            self.input_field.insert(0, base)
+        # Append new preview
+        if text:
+            self.input_field.insert("end", text)
+            self._composing_preview_len = len(text)
+        else:
+            self._composing_preview_len = 0
+
+    def compose_finalize(self, text):
+        """Finalize IME composition — replace preview with final text, keep everything before it."""
+        # Remove the preview
+        if self._composing_preview_len > 0:
+            current = self.input_field.get()
+            base = current[:-self._composing_preview_len]
+            self.input_field.delete(0, "end")
+            self.input_field.insert(0, base)
+        # Append final composed text
+        if text:
+            self.input_field.insert("end", text)
+        self._composing_preview_len = 0
+
+    def insert_text_only(self, text):
+        """Append text into the input field without sending (used by IME composition)."""
+        if not text: return
+        self.input_field.insert("end", text)
+
     # --- HELP POP-UP ---
+    def center_window(self, win, w, h):
+        x = self.root.winfo_rootx() + (self.root.winfo_width() // 2) - (w // 2)
+        y = self.root.winfo_rooty() + (self.root.winfo_height() // 2) - (h // 2)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+
     def show_welcome_help(self):
         help_win = tk.Toplevel(self.root)
         help_win.title("How to Use")
-        help_win.geometry("500x450")
+        self.center_window(help_win, 500, 450)
         help_win.configure(bg="#f0f0f0")
         help_win.transient(self.root)
         help_win.grab_set()
@@ -212,9 +416,10 @@ class PolyglotApp:
         self.notebook_btn.bind("<Button-1>", lambda e: self.toggle_notebook())
         ToolTip(self.notebook_btn, "View saved vocabulary. Hover over a word to see its definition. Press Delete/Backspace to remove.")
 
-        self.grammar_btn = tk.Label(self.ctrl_frame, text="✎", font=("Arial", 28), cursor="hand2")
+        self.grammar_btn = tk.Label(self.ctrl_frame, text="✎", font=("Arial", 28), cursor="hand2",
+                                     bg="#ececec", highlightbackground="#aaa", highlightthickness=1)
         self.grammar_btn.pack(side="left", padx=10)
-        self.grammar_btn.bind("<Button-1>", lambda e: self.toggle_grammar_panel())
+        self.grammar_btn.bind("<ButtonRelease-1>", lambda e: self.toggle_grammar_panel())
         ToolTip(self.grammar_btn, "Open the side panel for grammar explanations.")
 
         self.settings_btn = tk.Label(self.ctrl_frame, text="⚙", fg="black", font=("Arial", 32), cursor="hand2")
@@ -233,33 +438,16 @@ class PolyglotApp:
         self.chat_display = tk.Text(self.main_container, state="disabled", wrap="word", borderwidth=1, relief="solid", font=("Arial", 16))
         self.chat_display.pack(side="left", fill="both", expand=True)
         
-        # Configure both tags here!
         self.chat_display.tag_config("vocab_word", foreground="#FF8C00", font=("Arial", 16, "bold"))
         self.chat_display.tag_config("ai_clickable", foreground="#003366")
 
-        # Hover bindings for chat definition tooltip
         self.chat_display.bind("<Motion>", self.on_chat_hover)
         self.chat_display.bind("<Leave>", lambda e: self.hide_chat_tooltip())
 
-        # --- GRAMMAR TUTOR PANEL ---
-        self.grammar_frame = ttk.LabelFrame(self.main_container, text="Grammar Tutor")
-        
-        # Scrollable text area for explanations
-        self.grammar_text = tk.Text(self.grammar_frame, width=35, wrap="word", state="disabled", font=("Arial", 13), bg="#fcfcfc")
-        self.grammar_text.pack(fill="both", expand=True, padx=5, pady=5)
-
-        # Secondary Chat Bar for follow-up questions
-        self.grammar_input_frame = tk.Frame(self.grammar_frame)
-        self.grammar_input_frame.pack(fill="x", side="bottom", padx=5, pady=5)
-
-        self.grammar_input_field = ttk.Entry(self.grammar_input_frame, font=("Arial", 12))
-        self.grammar_input_field.pack(side="left", fill="x", expand=True)
-        self.grammar_input_field.bind("<Return>", lambda e: self.send_grammar_question())
-
-        self.grammar_send_btn = ttk.Button(self.grammar_input_frame, text="Ask", command=self.send_grammar_question)
-        self.grammar_send_btn.pack(side="right", padx=(5, 0))
-        
-        # Variable to hold the current sentence being analyzed
+        # --- GRAMMAR TUTOR (Toplevel popup window) ---
+        self.grammar_window = None
+        self.grammar_text = None
+        self.grammar_input_field = None
         self.current_grammar_context = ""
 
         # --- BUILD BOTTOM BAR CONTENT ---
@@ -311,8 +499,6 @@ class PolyglotApp:
 
         self.status_label = tk.Label(self.bottom_bar, text="○", font=("Arial", 20), foreground="gray")
         self.status_label.pack(side="left", padx=10)
-
-
     # --- DEFINITION HOVER TOOLTIP LOGIC ---
     def on_chat_hover(self, event):
         if event.state & 0x0100:
@@ -393,7 +579,7 @@ class PolyglotApp:
         
         self.settings_window = tk.Toplevel(self.root)
         self.settings_window.title("Settings")
-        self.settings_window.geometry("350x320")
+        self.center_window(self.settings_window, 350, 320)
         f = ttk.Frame(self.settings_window, padding=20)
         f.pack(fill="both", expand=True)
         
@@ -406,6 +592,9 @@ class PolyglotApp:
         ttk.Label(f, text="Silence Timeout (s):").pack(anchor="w", pady=(10,0))
         ttk.Scale(f, from_=1.0, to=10.0, variable=self.timeout_var).pack(fill="x", pady=5)
 
+        ttk.Label(f, text="TTS Volume:").pack(anchor="w", pady=(10,0))
+        ttk.Scale(f, from_=0.0, to=1.0, variable=self.tts_volume_var).pack(fill="x", pady=5)
+
         if self.lang_var.get() == "Japanese":
             ttk.Label(f, text="Reading Mode:").pack(anchor="w", pady=(10,0))
             ttk.Combobox(f, textvariable=self.reading_var, values=config.JAPANESE_MODES, state="readonly").pack(fill="x")
@@ -417,7 +606,7 @@ class PolyglotApp:
 
         self.notebook_window = tk.Toplevel(self.root)
         self.notebook_window.title("Notebook")
-        self.notebook_window.geometry("300x450")
+        self.center_window(self.notebook_window, 300, 450)
         lb = tk.Listbox(self.notebook_window, font=("Arial", 12), borderwidth=0, highlightthickness=0)
         lb.pack(fill="both", expand=True, padx=10, pady=10)
         
@@ -457,16 +646,64 @@ class PolyglotApp:
 
     # --- GRAMMAR PANEL LOGIC ---
     def toggle_grammar_panel(self):
-        if self.grammar_frame.winfo_ismapped():
-            self.grammar_frame.pack_forget()
-        else:
-            self.grammar_frame.pack(side="right", fill="y", padx=(10, 0))
+        """Toggle the grammar tutor popup window."""
+        try:
+            if self.grammar_window is not None and self.grammar_window.winfo_exists():
+                self.grammar_window.destroy()
+                self.grammar_window = None
+                self.grammar_text = None
+                self.grammar_input_field = None
+            else:
+                self._create_grammar_window()
+        except Exception:
+            self._create_grammar_window()
+
+    def _create_grammar_window(self):
+        """Create the grammar tutor popup window."""
+        self.grammar_window = tk.Toplevel(self.root)
+        self.grammar_window.title("Grammar Tutor")
+        self.grammar_window.geometry("450x500")
+        self.grammar_window.transient(self.root)
+
+        # Position next to the main window
+        x = self.root.winfo_x() + self.root.winfo_width() + 10
+        y = self.root.winfo_y()
+        # If it would go off-screen, position it overlapping
+        if x + 450 > self.root.winfo_screenwidth():
+            x = self.root.winfo_x() + self.root.winfo_width() - 460
+        self.grammar_window.geometry(f"450x500+{x}+{y}")
+
+        # Grammar text display
+        self.grammar_text = tk.Text(self.grammar_window, wrap="word", state="disabled",
+                                    font=("Arial", 13), bg="#fcfcfc")
+        self.grammar_text.pack(fill="both", expand=True, padx=8, pady=(8, 4))
+
+        # Input frame at bottom
+        input_frame = tk.Frame(self.grammar_window)
+        input_frame.pack(fill="x", side="bottom", padx=8, pady=(4, 8))
+
+        self.grammar_input_field = ttk.Entry(input_frame, font=("Arial", 12))
+        self.grammar_input_field.pack(side="left", fill="x", expand=True)
+        self.grammar_input_field.bind("<Return>", lambda e: self.send_grammar_question())
+
+        send_btn = ttk.Button(input_frame, text="Ask", command=self.send_grammar_question)
+        send_btn.pack(side="right", padx=(5, 0))
+
+        # Show initial text
+        self.grammar_text.config(state="normal")
+        self.grammar_text.insert("1.0", "Grammar Tutor ready.\n\nDouble-click an AI response in the chat to analyze its grammar, or type a question below.\n")
+        self.grammar_text.config(state="disabled")
+
+        # Handle window close
+        self.grammar_window.protocol("WM_DELETE_WINDOW", self.toggle_grammar_panel)
 
 
     # --- REMAINING LOGIC (AI, TTS, STT) ---
     def on_language_change(self, e=None):
         self.ai.clear_history()
-        self.grammar_frame.pack_forget() 
+        if self.grammar_window is not None and self.grammar_window.winfo_exists():
+            self.grammar_window.destroy()
+            self.grammar_window = None
         self.update_chat("System", f"Switched to {self.lang_var.get()}. Memory wiped.")
 
     def play_tts(self, text, lang, speed):
@@ -525,7 +762,7 @@ class PolyglotApp:
                 self.chat_display.tag_add("vocab_word", f"1.0 + {m.start()} chars", f"1.0 + {m.end()} chars")
 
         self.chat_display.tag_raise("vocab_word")
-        
+
     def send_message(self):
         text = self.input_field.get()
         if not text: return
@@ -577,9 +814,25 @@ class PolyglotApp:
             threading.Thread(target=self.conversation_loop, daemon=True).start()
         else: self.set_status("idle")
 
+    def toggle_keyboard(self):
+        self.ime_active = not self.ime_active
+        if self.ime_active:
+            self.kbd_lbl.config(text="あ", bg="#a0a0a0")
+            lang = self.lang_var.get()
+            engine = {"Japanese": "anthy", "Korean": "hangul", "Chinese": "googlepinyin"}.get(lang, "fcitx-keyboard-us")
+            try:
+                subprocess.run(["fcitx-remote", "-s", engine], check=False)
+                subprocess.run(["fcitx-remote", "-o"], check=False)
+            except: pass
+        else:
+            self.kbd_lbl.config(text="A", bg="#ececec")
+            try:
+                subprocess.run(["fcitx-remote", "-c"], check=False)
+            except: pass
+
     def conversation_loop(self):
         while self.conversation_running:
-            if self.is_processing or self.is_ai_talking or pygame.mixer.get_busy():
+            if self.is_processing or self.is_ai_talking or self._audio_pending_file:
                 time.sleep(0.5); continue
             self.set_status("listening")
             try:
@@ -615,8 +868,8 @@ class PolyglotApp:
             return
 
         # Open the grammar panel if it's closed
-        if not self.grammar_frame.winfo_ismapped():
-            self.toggle_grammar_panel()
+        if self.grammar_window is None or not self.grammar_window.winfo_exists():
+            self._create_grammar_window()
 
         self.current_grammar_context = line_text
         self.update_grammar_panel("System", f"Analyzing grammar for:\n'{line_text}'...", clear=True)
@@ -636,6 +889,8 @@ class PolyglotApp:
             self.root.after(0, lambda: self.update_grammar_panel("Error", "Failed to fetch explanation.", clear=True))
 
     def send_grammar_question(self):
+        if self.grammar_input_field is None:
+            return
         question = self.grammar_input_field.get()
         if not question: 
             return
@@ -658,13 +913,17 @@ class PolyglotApp:
             self.root.after(0, lambda: self.update_grammar_panel("Error", "Failed to fetch response."))
 
     def update_grammar_panel(self, sender, text, clear=False):
-        self.grammar_text.config(state="normal")
-        if clear:
-            self.grammar_text.delete("1.0", "end")
-        
-        self.grammar_text.insert("end", f"{sender}:\n{text}\n\n")
-        self.grammar_text.config(state="disabled")
-        self.grammar_text.see("end")
+        if self.grammar_text is None:
+            return
+        try:
+            self.grammar_text.config(state="normal")
+            if clear:
+                self.grammar_text.delete("1.0", "end")
+            self.grammar_text.insert("end", f"{sender}:\n{text}\n\n")
+            self.grammar_text.config(state="disabled")
+            self.grammar_text.see("end")
+        except tk.TclError:
+            pass  # Window was closed
 
 if __name__ == "__main__":
     root = tk.Tk()

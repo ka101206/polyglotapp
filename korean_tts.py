@@ -2,16 +2,13 @@ import asyncio
 import threading
 import edge_tts
 import os
-import pygame
 
 class KoreanTTSEngine:
-    def __init__(self):
+    def __init__(self, audio_player=None):
         print("Loading Edge-TTS Engine (Korean)...")
-        if not pygame.mixer.get_init():
-            pygame.mixer.init()
-        
         # "SunHi" is the premier natural female Korean voice
         self.voice = "ko-KR-SunHiNeural" 
+        self.audio_player = audio_player  # callback: play_audio(filepath) -> blocks until done
 
     def speak(self, text, speed=1.0, on_start=None, on_done=None):
         """Threaded wrapper to keep the GUI responsive."""
@@ -42,13 +39,12 @@ class KoreanTTSEngine:
         communicate = edge_tts.Communicate(text, self.voice, rate=rate_str)
         await communicate.save(temp_file)
         
-        pygame.mixer.music.load(temp_file)
-        pygame.mixer.music.play()
-        
-        while pygame.mixer.music.get_busy():
-            await asyncio.sleep(0.1)
+        # Play audio via browser callback
+        if self.audio_player:
+            self.audio_player(temp_file)
+        else:
+            print("⚠️ No audio player configured, skipping playback")
             
-        pygame.mixer.music.unload()
         if os.path.exists(temp_file):
             try:
                 os.remove(temp_file)

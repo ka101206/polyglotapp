@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Polyglot AI Tutor</title>
+    <meta charset="UTF-8">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; background: #2b2b2b; overflow: hidden; }
+        #top_bar {
+            height: 28px;
+            background: linear-gradient(to bottom, #6b89a8 0%, #4e6e8e 100%);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 10px; color: white; font: bold 12px sans-serif;
+        }
+        #status { flex: 1; text-align: center; }
+        .top-btn {
+            cursor: pointer; padding: 2px 8px;
+            background: rgba(255,255,255,0.15); border-radius: 3px;
+            margin-left: 6px;
+        }
+        .top-btn:hover { background: rgba(255,255,255,0.3); }
+        #screen { width: 100%; height: calc(100% - 28px); position: relative; }
+    </style>
+
+    <script type="module">
+        import RFB from './core/rfb.js';
+
+        const url = 'ws://' + location.hostname + ':' + location.port + '/websockify';
+        const rfb = new RFB(document.getElementById('screen'), url);
+
+        rfb.scaleViewport = true;
+        rfb.resizeSession = false;
+
+        rfb.addEventListener("connect", () => {
+            document.getElementById('status').textContent = 'Connected';
+
+            const screenDiv = document.getElementById('screen');
+
+            // Create transparent textarea overlay for IME support
+            const textarea = document.createElement('textarea');
+            textarea.setAttribute('autocomplete', 'off');
+            textarea.setAttribute('autocorrect', 'off');
+            textarea.setAttribute('autocapitalize', 'off');
+            textarea.setAttribute('spellcheck', 'false');
+            textarea.style.cssText = [
+                'position:absolute', 'top:0', 'left:0',
+                'width:100%', 'height:100%',
+                'opacity:0', 'z-index:10',
+                'cursor:default', 'pointer-events:none',
+                'resize:none', 'border:none', 'outline:none',
+                'font-size:16px', 'color:transparent', 'background:transparent'
+            ].join(';');
+            screenDiv.appendChild(textarea);
+
+            // Detach noVNC's keyboard handler completely
+            rfb._keyboard.ungrab();
+
+            // Override focus so canvas doesn't steal it
+            rfb.focus = function(options) {
+                textarea.focus(options || { preventScroll: true });
+            };
+
+            // Focus textarea when clicking in the VNC area
+            screenDiv.addEventListener('mousedown', () => {
+                textarea.focus({ preventScroll: true });
+            });
+
+            // === Custom keyboard handling ===
+            let composing = false;
+
+            textarea.addEventListener('compositionstart', () => {
+                composing = true;
+            });
+
+            // Live preview: send intermediate composition text to the input field
+            textarea.addEventListener('compositionupdate', (e) => {
+                const text = e.data || '';
+                fetch('http://localhost:8081/compose', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text })
+                });
+            });
+
+            textarea.addEventListener('compositionend', (e) => {
+                composing = false;
+                const text = e.data || '';
+                // Send final composed text to input field
+                fetch('http://localhost:8081/insert', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text })
+                });
+                setTimeout(() => { textarea.value = ''; }, 20);
+            });
+
+            // Forward non-composition key events to VNC
+            textarea.addEventListener('keydown', (e) => {
+                if (composing || e.isComposing || e.keyCode === 229) {
+                    return;
+                }
+                rfb._keyboard._handleKeyDown(e);
+            });
+
+            textarea.addEventListener('keyup', (e) => {
+                if (composing || e.isComposing || e.keyCode === 229) {
+                    return;
+                }
+                rfb._keyboard._handleKeyUp(e);
+            });
+
+            // Clear textarea for non-composition input
+            textarea.addEventListener('input', () => {
+                if (!composing) {
+                    textarea.value = '';
+                }
+            });
+
+            // Initial focus
+            textarea.focus({ preventScroll: true });
+        });
+
+        rfb.addEventListener("disconnect", (e) => {
+            document.getElementById('status').textContent =
+                e.detail.clean ? 'Disconnected' : 'Connection lost';
+        });
+
+        rfb.addEventListener("credentialsrequired", () => {
+            const pw = prompt("Password Required:");
+            rfb.sendCredentials({ password: pw });
+        });
+
+        // Top bar buttons
+        document.getElementById('sendCtrlAltDelButton').onclick = () => rfb.sendCtrlAltDel();
+
+        // === BROWSER AUDIO PLAYER ===
+        // Polls the Python backend for audio files to play.
+        // TTS engines generate audio files -> Python queues them -> JS plays them.
+        let audioPlaying = false;
+
+        async function checkAudio() {
+            if (audioPlaying) return;
+            try {
+                const resp = await fetch('http://localhost:8081/audio/status');
+                const data = await resp.json();
+                if (data.file) {
+                    audioPlaying = true;
+                    const audioUrl = 'http://localhost:8081' + data.file;
+                    const audio = new Audio(audioUrl);
+                    audio.volume = (typeof data.volume === 'number') ? data.volume : 1.0;
+                    audio.onended = async () => {
+                        audioPlaying = false;
+                        try { await fetch('http://localhost:8081/audio/done'); } catch(e) {}
+                    };
+                    audio.onerror = async () => {
+                        console.error('Audio playback error');
+                        audioPlaying = false;
+                        try { await fetch('http://localhost:8081/audio/done'); } catch(e) {}
+                    };
+                    audio.play().catch(err => {
+                        console.error('Audio play failed:', err);
+                        audioPlaying = false;
+                        fetch('http://localhost:8081/audio/done').catch(() => {});
+                    });
+                }
+            } catch (e) {
+                // Server not ready yet, ignore
+            }
+        }
+
+        // Poll every 400ms
+        setInterval(checkAudio, 400);
+    </script>
+</head>
+
+<body>
+    <div id="top_bar">
+        <div id="status">Connecting...</div>
+        <div>
+            <span id="sendCtrlAltDelButton" class="top-btn">Send CtrlAltDel</span>
+        </div>
+    </div>
+    <div id="screen"></div>
+</body>
+</html>

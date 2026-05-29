@@ -3,7 +3,7 @@ import os
 
 # --- API Settings ---
 AI_MODEL = "qwen2.5" 
-AI_API_URL = "http://localhost:11434/v1" 
+AI_API_URL = "http://host.docker.internal:11434/v1" 
 API_KEY = "ollama" 
 
 # --- Language Definitions ---

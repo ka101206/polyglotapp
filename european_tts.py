@@ -1,17 +1,11 @@
 import wave
 import threading
 import os
-import platform
 import re
 from piper.voice import PiperVoice
 
-if platform.system() == "Windows":
-    import winsound
-else:
-    winsound = None
-
 class EuropeanTTSEngine:
-    def __init__(self):
+    def __init__(self, audio_player=None):
         self.model_files = {
             "Spanish": "models/es_ES-sharvard-medium.onnx",
             "French": "models/fr_FR-tom-medium.onnx",
@@ -20,6 +14,7 @@ class EuropeanTTSEngine:
         self.voice = None
         self.current_lang = None
         self.lock = threading.Lock()
+        self.audio_player = audio_player  # callback: play_audio(filepath) -> blocks until done
 
     def load_voice(self, language):
         if language != self.current_lang:
@@ -67,7 +62,6 @@ class EuropeanTTSEngine:
                     with wave.open(output_file, "wb") as wav_file:
                         wav_file.setnchannels(1)
                         wav_file.setsampwidth(2)
-                        # USE THE NATIVE RATE HERE
                         wav_file.setframerate(native_rate)
                         
                         for result in self.voice.synthesize(clean_chunk):
@@ -78,10 +72,11 @@ class EuropeanTTSEngine:
                     continue
                 
                 if os.path.exists(output_file) and os.path.getsize(output_file) > 44:
-                    if platform.system() == "Windows":
-                        winsound.PlaySound(output_file, winsound.SND_FILENAME)
+                    # Play audio via browser callback
+                    if self.audio_player:
+                        self.audio_player(output_file)
                     else:
-                        os.system(f"afplay {output_file}")
+                        print("⚠️ No audio player configured, skipping playback")
             
             if on_done:
                 on_done()

@@ -19,7 +19,19 @@ RUN apt-get update && apt-get install -y \
     x11vnc \
     novnc \
     websockify \
+    fcitx \
+    fcitx-anthy \
+    fcitx-hangul \
+    fcitx-googlepinyin \
+    dbus-x11 \
+    fonts-noto-cjk \
+    locales \
     && rm -rf /var/lib/apt/lists/*
+
+RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
+    locale-gen
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
 
 WORKDIR /app
 

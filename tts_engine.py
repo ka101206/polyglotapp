@@ -2,23 +2,18 @@ import os
 import glob
 import soundfile as sf
 import threading
-import platform 
 import re 
-
-if platform.system() == "Windows":
-    import winsound
-else:
-    winsound = None 
 
 from kokoro_onnx import Kokoro
 from misaki import ja 
 
 class TTSEngine:
-    def __init__(self):
+    def __init__(self, audio_player=None):
         self.engine = None
         self.ja_g2p = ja.JAG2P()
         self.lock = threading.Lock()
         self.current_ja_voice = "jf_alpha"
+        self.audio_player = audio_player  # callback: play_audio(filepath) -> blocks until done
 
     def _init_engine(self):
         if self.engine: return self.engine
@@ -61,18 +56,17 @@ class TTSEngine:
                     print(f"🔊 Generating audio for chunk: {clean_chunk}")
                     
                     phonemes, _ = self.ja_g2p(clean_chunk)
-                    # Use the dynamically passed speed here
                     samples, sample_rate = engine.create(
                         phonemes, voice=self.current_ja_voice, speed=speed, lang="j", is_phonemes=True
                     )
 
                     sf.write('temp_audio.wav', samples, sample_rate)
 
-                    # Smart Playback: Check OS before playing
-                    if platform.system() == "Windows":
-                        winsound.PlaySound('temp_audio.wav', winsound.SND_FILENAME)
+                    # Play audio via browser callback
+                    if self.audio_player:
+                        self.audio_player('temp_audio.wav')
                     else:
-                        os.system("afplay temp_audio.wav")
+                        print("⚠️ No audio player configured, skipping playback")
 
             except Exception as e:
                 print(f"❌ Audio Error: {e}")
