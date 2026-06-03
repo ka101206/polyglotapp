@@ -1,13 +1,21 @@
 # ai_client.py
 import openai
+from openai import OpenAI
 import re
 import config
 
 class AIClient:
-    def __init__(self):
-        base_url = config.AI_API_URL.split("/chat/completions")[0]
-        self.client = openai.OpenAI(api_key=config.API_KEY, base_url=base_url)
-        self.model = config.AI_MODEL
+    def __init__(self, model_override=None):
+        import os
+        vllm_url = os.environ.get("VLLM_URL", "http://localhost:8000/v1")
+        # We don't need a real API key for local vLLM, but the client requires the parameter
+        api_key = os.environ.get("OPENAI_API_KEY", "dummy_key_for_vllm")
+        
+        self.client = OpenAI(
+            base_url=vllm_url,
+            api_key=api_key
+        )
+        self.model = model_override or "Qwen/Qwen2.5-7B-Instruct"
         self.conversation_history = [] 
 
     def clear_history(self):
@@ -218,3 +226,31 @@ Keep your critique concise and actionable. Do not use Markdown headings, just pl
             return response.choices[0].message.content.strip(), True
         except Exception as e:
             return f"Critique Generation Error: {str(e)}", False
+
+    def get_pronunciation_feedback(self, lang, analysis_data):
+        system_prompt = f"""You are an expert {lang} pronunciation coach.
+The user just spoke the phrase: "{analysis_data['text']}"
+
+Here is the acoustic analysis of their speech compared to a native speaker reference:
+- Overall Naturalness Score: {analysis_data['overall_score']}/100
+- Pitch/Intonation Match: {analysis_data['pitch_score']}/100
+- Stress/Intensity Match: {analysis_data['stress_score']}/100
+- Rhythm Match: {analysis_data['rhythm_score']}/100
+- User Duration: {analysis_data['user_duration']}s (Reference: {analysis_data['ref_duration']}s)
+
+Provide short, encouraging, actionable feedback.
+1. Start with an overall assessment (e.g. "Natural", "Slightly Off", "Hard to Understand").
+2. Highlight one thing they did well.
+3. Suggest one specific area for improvement based on the lowest score (e.g., if rhythm is low, mention pacing; if pitch is low, mention intonation or tone).
+Keep it under 3 sentences."""
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "system", "content": system_prompt}],
+                temperature=0.7,
+                max_tokens=150
+            )
+            return response.choices[0].message.content.strip(), True
+        except Exception as e:
+            return f"Failed to generate feedback: {str(e)}", False

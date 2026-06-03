@@ -15,6 +15,7 @@ class EuropeanTTSEngine:
         self.current_lang = None
         self.lock = threading.Lock()
         self.audio_player = audio_player  # callback: play_audio(filepath) -> blocks until done
+        self.stop_flag = threading.Event()
 
     def load_voice(self, language):
         if language != self.current_lang:
@@ -25,6 +26,12 @@ class EuropeanTTSEngine:
                 print(f"✅ Successfully loaded {language} neural model.")
             else:
                 print(f"❌ Error: Model file not found for {language} at {path}")
+
+    def stop(self):
+        self.stop_flag.set()
+
+    def reset(self):
+        self.stop_flag.clear()
 
     def speak(self, text, language, speed=1.0, on_start=None, on_done=None):
         threading.Thread(target=self._run_speak, args=(text, language, speed, on_start, on_done), daemon=True).start()
@@ -54,6 +61,10 @@ class EuropeanTTSEngine:
             print(f"⏩ {language} | Rate: {native_rate}Hz | Speed: {speed}x")
 
             for chunk in chunks:
+                if self.stop_flag.is_set():
+                    print(f"🛑 TTS interrupted ({language})")
+                    break
+
                 clean_chunk = chunk.strip()
                 if not clean_chunk:
                     continue
@@ -73,6 +84,10 @@ class EuropeanTTSEngine:
                 except Exception as e:
                     print(f"❌ Piper Synthesis Error: {e}")
                     continue
+
+                if self.stop_flag.is_set():
+                    print(f"🛑 TTS interrupted ({language})")
+                    break
                 
                 if os.path.exists(output_file) and os.path.getsize(output_file) > 44:
                     # Play audio via browser callback

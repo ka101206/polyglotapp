@@ -9,6 +9,13 @@ class KoreanTTSEngine:
         # "SunHi" is the premier natural female Korean voice
         self.voice = "ko-KR-SunHiNeural" 
         self.audio_player = audio_player  # callback: play_audio(filepath) -> blocks until done
+        self.stop_flag = threading.Event()
+
+    def stop(self):
+        self.stop_flag.set()
+
+    def reset(self):
+        self.stop_flag.clear()
 
     def speak(self, text, speed=1.0, on_start=None, on_done=None):
         """Threaded wrapper to keep the GUI responsive."""
@@ -39,9 +46,17 @@ class KoreanTTSEngine:
         
         communicate = edge_tts.Communicate(text, self.voice, rate=rate_str)
         await communicate.save(temp_file)
+
+        if self.stop_flag.is_set():
+            print("🛑 TTS interrupted (Korean)")
+            if os.path.exists(temp_file):
+                try: os.remove(temp_file)
+                except: pass
+            return
         
         # Play audio via browser callback
         if self.audio_player:
             self.audio_player(temp_file)
         else:
             print("⚠️ No audio player configured, skipping playback")
+

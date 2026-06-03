@@ -1,22 +1,65 @@
-version: "3.8"
 services:
-  polyglot-tts:
-    build: .
-    image: polyglot-tts:latest
-    container_name: polyglot-tts-app
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: polyglot-db
+    environment:
+      - POSTGRES_PASSWORD=polyglot_secret
+      - POSTGRES_USER=polyglot
+      - POSTGRES_DB=polyglot
     ports:
-      - "8080:8080"
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: always
+
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: polyglot-vllm
+    command: --model Qwen/Qwen2.5-7B-Instruct --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  backend:
+    build: 
+      context: .
+      dockerfile: backend.Dockerfile
+    container_name: polyglot-backend
+    ports:
       - "8081:8081"
     volumes:
       - .:/app
-    # Ensure Docker doesn't try to use native audio devices on Mac to prevent crashes
     environment:
-      - SDL_AUDIODRIVER=dummy
-
-  tunnel:
-    image: alpine
-    container_name: polyglot-tunnel
-    command: sh -c "apk add --no-cache openssh-client && ssh -o StrictHostKeyChecking=no -p 443 -R0:polyglot-tts:8080 a.pinggy.io"
+      - DATABASE_URL=postgresql://polyglot:polyglot_secret@db:5432/polyglot
+      - VLLM_URL=http://vllm:8000/v1
     depends_on:
-      - polyglot-tts
+      - db
     restart: always
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: frontend.Dockerfile
+    container_name: polyglot-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8081
+    depends_on:
+      - backend
+    restart: always
+
+volumes:
+  pgdata:

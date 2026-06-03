@@ -15,6 +15,7 @@ class TTSEngine:
         self.cache = {}
         self.current_ja_voice = "jf_alpha"
         self.audio_player = audio_player  # callback: play_audio(filepath) -> blocks until done
+        self.stop_flag = threading.Event()
         threading.Thread(target=self._init_engine, daemon=True).start()
 
     def _init_engine(self):
@@ -38,48 +39,48 @@ class TTSEngine:
     def set_voice(self, ja_voice):
         self.current_ja_voice = ja_voice
 
-    def speak(self, text, speed=1.0, is_japanese=True, on_start=None, on_done=None):
-        threading.Thread(target=self._run_speak, args=(text, speed, on_start, on_done)).start()
-        
-    def _run_speak(self, text, speed, on_start, on_done):
+    def stop(self):
+        self.stop_flag.set()
+
+    def reset(self):
+        self.stop_flag.clear()
+
+    def generate_audio_stream(self, text, speed=1.0):
         engine = self._init_engine()
         if not engine: return
 
-        with self.lock:
-            try:
-                if on_start: on_start()
+        # Split text strictly by Japanese punctuation
+        chunks = re.split(r'(?<=[。！？])', text)
+
+        for chunk in chunks:
+            if self.stop_flag.is_set():
+                print("🛑 TTS interrupted (Japanese)")
+                break
+
+            clean_chunk = chunk.strip()
+            if not clean_chunk:
+                continue 
                 
-                # Split text strictly by Japanese punctuation
-                chunks = re.split(r'(?<=[。！？])', text)
+            cache_key = (clean_chunk, self.current_ja_voice, speed)
+            if cache_key in self.cache:
+                samples, sample_rate = self.cache[cache_key]
+            else:
+                phonemes = self.ja_g2p(clean_chunk)
+                samples, sample_rate = engine.create(
+                    phonemes, voice=self.current_ja_voice, speed=speed, lang="ja"
+                )
+                self.cache[cache_key] = (samples, sample_rate)
 
-                for chunk in chunks:
-                    clean_chunk = chunk.strip()
-                    if not clean_chunk:
-                        continue 
-                        
-                    cache_key = (clean_chunk, self.current_ja_voice, speed)
-                    if cache_key in self.cache:
-                        samples, sample_rate = self.cache[cache_key]
-                        print(f"🔊 Using cached audio for: {clean_chunk}")
-                    else:
-                        print(f"🔊 Generating audio for chunk: {clean_chunk}")
-                        phonemes, _ = self.ja_g2p(clean_chunk)
-                        samples, sample_rate = engine.create(
-                            phonemes, voice=self.current_ja_voice, speed=speed, lang="j", is_phonemes=True
-                        )
-                        self.cache[cache_key] = (samples, sample_rate)
-
-                    import uuid
-                    filename = f'temp_audio_{uuid.uuid4().hex}.mp3'
-                    sf.write(filename, samples, sample_rate)
-
-                    # Play audio via browser callback
-                    if self.audio_player:
-                        self.audio_player(filename)
-                    else:
-                        print("⚠️ No audio player configured, skipping playback")
-
-            except Exception as e:
-                print(f"❌ Audio Error: {e}")
-            finally:
-                if on_done: on_done()
+            # Convert numpy array to WAV bytes
+            import io, wave
+            import numpy as np
+            wav_io = io.BytesIO()
+            with wave.open(wav_io, 'wb') as wav_file:
+                wav_file.setnchannels(1)
+                wav_file.setsampwidth(2)
+                wav_file.setframerate(sample_rate)
+                # Convert float32 [-1, 1] to int16
+                audio_int16 = (samples * 32767).astype(np.int16)
+                wav_file.writeframes(audio_int16.tobytes())
+            
+            yield wav_io.getvalue()

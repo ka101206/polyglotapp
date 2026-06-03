@@ -9,6 +9,13 @@ class ChineseTTSEngine:
         # "Xiaoxiao" is the world-renowned 'gold standard' for natural Chinese TTS
         self.voice = "zh-CN-XiaoxiaoNeural" 
         self.audio_player = audio_player  # callback: play_audio(filepath) -> blocks until done
+        self.stop_flag = threading.Event()
+
+    def stop(self):
+        self.stop_flag.set()
+
+    def reset(self):
+        self.stop_flag.clear()
 
     def speak(self, text, speed=1.0, on_start=None, on_done=None):
         """Threaded wrapper to keep the GUI responsive."""
@@ -40,6 +47,13 @@ class ChineseTTSEngine:
         # 1. Generate the audio from Microsoft's Neural servers
         communicate = edge_tts.Communicate(text, self.voice, rate=rate_str)
         await communicate.save(temp_file)
+
+        if self.stop_flag.is_set():
+            print("🛑 TTS interrupted (Chinese)")
+            if os.path.exists(temp_file):
+                try: os.remove(temp_file)
+                except: pass
+            return
         
         # 2. Play audio via browser callback
         if self.audio_player:
@@ -48,3 +62,4 @@ class ChineseTTSEngine:
             print("⚠️ No audio player configured, skipping playback")
             
         # 3. Clean up the temp file
+
