@@ -1,26 +1,31 @@
 import os
-import glob
-import soundfile as sf
+import io
+import re
+import wave
+import asyncio
 import threading
-import re 
 
+import numpy as np
+import soundfile as sf
 from kokoro_onnx import Kokoro
-from misaki import ja 
+from misaki import ja
+
 
 class TTSEngine:
-    def __init__(self, audio_player=None):
+    def __init__(self):
         self.engine = None
         self.ja_g2p = ja.JAG2P()
         self.lock = threading.Lock()
         self.cache = {}
         self.current_ja_voice = "jf_alpha"
-        self.audio_player = audio_player  # callback: play_audio(filepath) -> blocks until done
         self.stop_flag = threading.Event()
         threading.Thread(target=self._init_engine, daemon=True).start()
 
     def _init_engine(self):
+        import glob
         with self.lock:
-            if self.engine: return self.engine
+            if self.engine:
+                return self.engine
             target_model = "kokoro-v1.0.onnx"
             if not os.path.exists(target_model):
                 found = glob.glob("*.onnx")
@@ -45,42 +50,62 @@ class TTSEngine:
     def reset(self):
         self.stop_flag.clear()
 
-    def generate_audio_stream(self, text, speed=1.0):
+    @staticmethod
+    def _samples_to_wav(samples, sample_rate) -> bytes:
+        """Convert float32 numpy array to WAV bytes."""
+        buf = io.BytesIO()
+        with wave.open(buf, 'wb') as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(sample_rate)
+            wf.writeframes((samples * 32767).astype(np.int16).tobytes())
+        return buf.getvalue()
+
+    async def generate_audio_stream(self, text, speed=1.0, language="Japanese"):
+        """Yields WAV bytes for the given text. The caller should already have
+        split text at sentence boundaries; this method treats text as a single chunk."""
+
+        if language != "Japanese":
+            import edge_tts
+            voice_map = {
+                "Spanish": "es-ES-AlvaroNeural",
+                "French": "fr-FR-HenriNeural",
+                "Italian": "it-IT-DiegoNeural",
+                "Chinese": "zh-CN-YunxiNeural",
+                "Korean": "ko-KR-InJoonNeural",
+                "English": "en-US-GuyNeural",
+            }
+            voice = voice_map.get(language, "en-US-GuyNeural")
+            rate_str = f"+{int((speed - 1.0) * 100)}%" if speed >= 1.0 else f"{int((speed - 1.0) * 100)}%"
+            communicate = edge_tts.Communicate(text, voice, rate=rate_str)
+            audio_data = bytearray()
+            async for chunk in communicate.stream():
+                if self.stop_flag.is_set():
+                    break
+                if chunk["type"] == "audio":
+                    audio_data.extend(chunk["data"])
+            if audio_data:
+                yield bytes(audio_data)
+            return
+
+        # --- Japanese / Kokoro ---
         engine = self._init_engine()
-        if not engine: return
+        if not engine:
+            return
 
-        # Split text strictly by Japanese punctuation
-        chunks = re.split(r'(?<=[。！？])', text)
+        clean = text.strip()
+        if not clean:
+            return
 
-        for chunk in chunks:
-            if self.stop_flag.is_set():
-                print("🛑 TTS interrupted (Japanese)")
-                break
+        cache_key = (clean, self.current_ja_voice, speed)
+        if cache_key in self.cache:
+            samples, sr = self.cache[cache_key]
+        else:
+            phonemes, _ = self.ja_g2p(clean)
+            samples, sr = await asyncio.to_thread(
+                engine.create, phonemes,
+                voice=self.current_ja_voice, speed=speed, lang="ja", is_phonemes=True,
+            )
+            self.cache[cache_key] = (samples, sr)
 
-            clean_chunk = chunk.strip()
-            if not clean_chunk:
-                continue 
-                
-            cache_key = (clean_chunk, self.current_ja_voice, speed)
-            if cache_key in self.cache:
-                samples, sample_rate = self.cache[cache_key]
-            else:
-                phonemes = self.ja_g2p(clean_chunk)
-                samples, sample_rate = engine.create(
-                    phonemes, voice=self.current_ja_voice, speed=speed, lang="ja"
-                )
-                self.cache[cache_key] = (samples, sample_rate)
-
-            # Convert numpy array to WAV bytes
-            import io, wave
-            import numpy as np
-            wav_io = io.BytesIO()
-            with wave.open(wav_io, 'wb') as wav_file:
-                wav_file.setnchannels(1)
-                wav_file.setsampwidth(2)
-                wav_file.setframerate(sample_rate)
-                # Convert float32 [-1, 1] to int16
-                audio_int16 = (samples * 32767).astype(np.int16)
-                wav_file.writeframes(audio_int16.tobytes())
-            
-            yield wav_io.getvalue()
+        yield self._samples_to_wav(samples, sr)

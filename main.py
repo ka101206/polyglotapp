@@ -1,12 +1,26 @@
 import os
+import json
+import base64
+import re
+import asyncio
+import random
+import traceback
+
 import bcrypt
-from fastapi import FastAPI, Depends, HTTPException, WebSocket, UploadFile, File, Form
+import pykakasi
+from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager
 
-from database import init_db, get_db, User, Message, Vocabulary
+import config
+from database import init_db, get_db, SessionLocal, User, Message, Vocabulary
 from analytics import AnalyticsManager
+from ai_client import AIClient
+from tts_engine import TTSEngine
+
+# ---------- App setup ----------
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -14,16 +28,21 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(lifespan=lifespan)
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # In production, restrict this
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-from pydantic import BaseModel
+# ---------- Singletons ----------
+
+ai_client = AIClient()
+tts_engine = TTSEngine()
+_kakasi = pykakasi.kakasi()  # Reuse a single instance
+
+# ---------- Auth ----------
 
 class AuthRequest(BaseModel):
     username: str
@@ -38,8 +57,7 @@ class AuthResponse(BaseModel):
 def register(req: AuthRequest, db: Session = Depends(get_db)):
     if db.query(User).filter(User.username == req.username).first():
         raise HTTPException(status_code=400, detail="Username already exists")
-    
-    hashed = bcrypt.hashpw(req.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    hashed = bcrypt.hashpw(req.password.encode(), bcrypt.gensalt()).decode()
     new_user = User(username=req.username, password_hash=hashed)
     db.add(new_user)
     db.commit()
@@ -49,10 +67,11 @@ def register(req: AuthRequest, db: Session = Depends(get_db)):
 @app.post("/auth/login", response_model=AuthResponse)
 def login(req: AuthRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == req.username).first()
-    if not user or not bcrypt.checkpw(req.password.encode('utf-8'), user.password_hash.encode('utf-8')):
+    if not user or not bcrypt.checkpw(req.password.encode(), user.password_hash.encode()):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    
     return {"user_id": user.id, "username": user.username, "message": "Logged in successfully"}
+
+# ---------- Analytics ----------
 
 @app.get("/api/analytics/{user_id}")
 def get_analytics(user_id: int, db: Session = Depends(get_db)):
@@ -66,45 +85,243 @@ def get_analytics(user_id: int, db: Session = Depends(get_db)):
 def health():
     return {"status": "ok"}
 
-from fastapi import WebSocketDisconnect
-from ai_client import AIClient
-from tts_engine import TTSEngine
-import json
-import base64
+# ---------- Text helpers ----------
 
-ai_client_instance = AIClient()
-tts_engine_instance = TTSEngine()
+def strip_romaji(text: str) -> str:
+    return re.sub(r'\s*\(([a-zA-Z][a-zA-Z0-9\s\-\x27,.!?]*)\)', '', text)
+
+def dedup_repeated_phrases(text: str) -> str:
+    text = re.sub(r'\b(.{3,60}?)\s+\1\b', r'\1', text, flags=re.IGNORECASE)
+    text = re.sub(r'\b(.{3,60}?)\s+\1\b', r'\1', text, flags=re.IGNORECASE)
+    return text
+
+def apply_reading_mode(text: str, language: str, reading_mode: str) -> str:
+    if language != "Japanese" or reading_mode not in ("ふりがな", "かなのみ"):
+        return text
+    result = _kakasi.convert(text)
+    if reading_mode == "ふりがな":
+        return "".join(
+            f"<ruby>{item['orig']}<rt>{item['hira']}</rt></ruby>" if item['orig'] != item['hira'] else item['orig']
+            for item in result
+        )
+    else:  # かなのみ
+        return "".join(item['hira'] for item in result)
+
+def needs_furigana(reading_mode: str) -> bool:
+    return reading_mode in ("ふりがな", "かなのみ")
+
+# ---------- WebSocket ----------
 
 @app.websocket("/ws/chat/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: int):
     await websocket.accept()
-    # In a real app, you'd fetch the user's conversation history from DB here
+    db = next(get_db())
+    analytics_manager = AnalyticsManager(db, user_id)
+    scenario_grammar_errors = []
+
+    async def send_audio(text, speed, language):
+        """Generate and send audio for a single sentence."""
+        async for audio_bytes in tts_engine.generate_audio_stream(text, speed=speed, language=language):
+            encoded = base64.b64encode(audio_bytes).decode()
+            await websocket.send_json({"type": "audio", "data": encoded})
+
+    async def fetch_word_bank(reply_text, lang, diff):
+        if "Beginner" in diff or "Elementary" in diff:
+            include_decoys = "Elementary" in diff
+            words, ok = await ai_client.generate_word_bank(reply_text, lang, include_decoys)
+            if ok and words:
+                await websocket.send_json({"type": "word_bank", "words": words})
+
     try:
         while True:
             data = await websocket.receive_text()
             payload = json.loads(data)
-            user_text = payload.get("text", "")
-            
-            # 1. Get AI Reply
-            reply, success = ai_client_instance.get_reply(user_text)
-            
-            if success:
-                # Send text back to UI immediately
-                await websocket.send_json({"type": "text", "content": reply})
-                
-                # 2. Generate and stream audio
-                # For this prototype we assume Japanese TTS
-                for chunk_bytes in tts_engine_instance.generate_audio_stream(reply):
-                    # We encode raw WAV bytes to base64 to send over JSON WebSocket
-                    encoded = base64.b64encode(chunk_bytes).decode('utf-8')
-                    await websocket.send_json({"type": "audio", "data": encoded})
-                    
+            msg_type = payload.get("type", "chat")
+
+            # --- Tutor Chat ---
+            if msg_type == "tutor_chat":
+                question = payload.get("question", "")
+                original_text = payload.get("original_text", "")
+                grammar_correction = payload.get("grammar_correction", "")
+                history = payload.get("history", [])
+                target_language = payload.get("language", "Japanese")
+                reading_mode = payload.get("readingMode", "なし")
+
+                reply = await ai_client.chat_with_grammar_tutor(question, original_text, grammar_correction, history, target_language)
+                reply = dedup_repeated_phrases(reply)
+                if target_language == "Japanese":
+                    reply = strip_romaji(reply)
+                display = apply_reading_mode(reply, target_language, reading_mode)
+                await websocket.send_json({"type": "tutor_reply", "content": display})
+                continue
+
+            # --- Repeat Audio ---
+            if msg_type == "repeat":
+                text_to_repeat = payload.get("text", "")
+                req_lang = payload.get("language", "Japanese")
+                req_speed = float(payload.get("speed", 0.8))
+                await send_audio(text_to_repeat, req_speed, req_lang)
                 await websocket.send_json({"type": "audio_done"})
+                continue
+
+            # --- Start Scenario ---
+            if msg_type == "start_scenario":
+                scenario_name = payload.get("scenario")
+                language = payload.get("language", "Japanese")
+                difficulty = payload.get("difficulty", "Intermediate")
+                reading_mode = payload.get("reading_mode", "なし")
+                scenario_dict = config.SCENARIOS.get(scenario_name)
+                scenario_grammar_errors = []
+
+                cached_list = scenario_dict.get("cached_intros", {}).get(language)
+                if not cached_list:
+                    await websocket.send_json({"type": "error", "content": "Intro not found."})
+                    continue
+
+                reply = random.choice(cached_list)
+                ai_client.start_scenario(reply)
+                display = apply_reading_mode(reply, language, reading_mode)
+
+                await websocket.send_json({"type": "scenario_start", "scenario": scenario_name, "goal": scenario_dict["user_goal"]})
+                await websocket.send_json({"type": "text", "content": display, "raw_content": reply})
+
+                req_speed = float(payload.get("speed", 1.0))
+                await send_audio(reply, req_speed, language)
+                await websocket.send_json({"type": "audio_done"})
+                asyncio.create_task(fetch_word_bank(reply, language, difficulty))
+                continue
+
+            # --- Normal / Scenario Chat ---
+            user_text = payload.get("text", "")
+            language = payload.get("language", "Japanese")
+            difficulty = payload.get("difficulty", "Intermediate")
+            scenario = payload.get("scenario")
+            reading_mode = payload.get("reading_mode", "なし")
+            req_speed = float(payload.get("speed", 1.0))
+
+            # Track speaking analytics
+            duration = payload.get("duration")
+            db_user = db.query(User).filter(User.id == user_id).first()
+            if duration:
+                if db_user:
+                    db_user.total_chars_spoken += len(user_text)
+                    db_user.total_seconds_spoken += duration
+                    if db_user.total_seconds_spoken > 0:
+                        db_user.avg_chars_per_second = db_user.total_chars_spoken / db_user.total_seconds_spoken
+                    db.commit()
+                analytics_manager.add_speaking_time(duration)
             else:
-                await websocket.send_json({"type": "error", "content": reply})
-                
+                avg = db_user.avg_chars_per_second if db_user and db_user.avg_chars_per_second > 0 else 5.0
+                analytics_manager.add_speaking_time(len(user_text) / avg)
+
+            # Pick the right generator
+            if scenario:
+                scenario_dict = config.SCENARIOS.get(scenario)
+                generator = ai_client.get_scenario_reply_stream(user_text, language, difficulty, scenario_dict)
+            else:
+                generator = ai_client.get_reply_stream(user_text, language, difficulty)
+
+            # Fire grammar check in background
+            async def _grammar_check():
+                grammar = await ai_client.get_grammar_correction(user_text, language)
+                if grammar:
+                    if grammar != "PERFECT":
+                        analytics_manager.add_mistake()
+                        if scenario:
+                            scenario_grammar_errors.append(grammar)
+                    await websocket.send_json({"type": "grammar", "content": grammar})
+            asyncio.create_task(_grammar_check())
+
+            # --- Stream LLM → UI + Audio ---
+            use_furigana = needs_furigana(reading_mode)
+            audio_queue = asyncio.Queue()
+            final_full_reply = ""
+            goal_reached = False
+            success = False
+
+            async def _audio_worker():
+                while True:
+                    chunk = await audio_queue.get()
+                    if chunk is None:
+                        break
+                    await send_audio(chunk, req_speed, language)
+
+            audio_task = asyncio.create_task(_audio_worker())
+
+            async for text_delta, sentence, full_reply, ok, done in generator:
+                if not ok:
+                    await websocket.send_json({"type": "error", "content": text_delta})
+                    break
+
+                if done:
+                    final_full_reply = full_reply
+                    success = True
+                    break
+
+                # Stream text to UI
+                if text_delta and not use_furigana:
+                    await websocket.send_json({"type": "text", "content": text_delta, "raw_content": text_delta})
+
+                # When a full sentence is ready
+                if sentence:
+                    clean = ai_client._cleanup_text(sentence)
+                    if not clean:
+                        continue
+
+                    if "[GOAL_REACHED]" in clean:
+                        goal_reached = True
+                        clean = clean.replace("[GOAL_REACHED]", "").strip()
+                        if not clean:
+                            continue
+
+                    # If furigana mode, send the processed sentence now
+                    if use_furigana:
+                        display = apply_reading_mode(clean, language, reading_mode)
+                        await websocket.send_json({"type": "text", "content": display, "raw_content": clean})
+
+                    await audio_queue.put(clean)
+
+            # Shut down audio worker
+            await audio_queue.put(None)
+            await audio_task
+
+            if success:
+                await websocket.send_json({"type": "audio_done"})
+
+                if final_full_reply:
+                    clean_reply = final_full_reply.replace("[GOAL_REACHED]", "").strip()
+                    asyncio.create_task(fetch_word_bank(clean_reply, language, difficulty))
+
+                if goal_reached or "[GOAL_REACHED]" in (final_full_reply or ""):
+                    analytics_manager.add_fluency_score(random.randint(70, 95))
+                    analytics_manager.add_grammar_score(random.randint(70, 95))
+                    analytics_manager.add_listening_score(random.randint(70, 95))
+
+                    critique = (
+                        "Great job! You completed the scenario with perfect grammar."
+                        if not scenario_grammar_errors
+                        else "Scenario completed! Here are some grammar corrections from this session:\n\n"
+                             + "\n".join(f"{i}. {err}" for i, err in enumerate(scenario_grammar_errors, 1))
+                    )
+                    await websocket.send_json({"type": "scenario_complete", "critique": critique})
+
     except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        print(f"WebSocket Error: {e}")
+        traceback.print_exc()
+    finally:
         print(f"Client {user_id} disconnected")
+
+# ---------- REST endpoints ----------
+
+@app.post("/api/ai/definition")
+async def get_definition(payload: dict):
+    word = payload.get("word")
+    context = payload.get("context", "")
+    language = payload.get("language", "Japanese")
+    definition = await ai_client.get_definition(word, context, language)
+    return {"definition": definition}
 
 @app.post("/api/audio/transcribe")
 async def transcribe_audio(file: UploadFile = File(...)):
@@ -113,3 +330,42 @@ async def transcribe_audio(file: UploadFile = File(...)):
     audio_bytes = await file.read()
     text = stt.transcribe_audio(audio_bytes)
     return {"text": text}
+
+@app.get("/api/notebook")
+async def get_notebook(user_id: int):
+    db = SessionLocal()
+    try:
+        vocab = db.query(Vocabulary).filter(Vocabulary.user_id == user_id).order_by(Vocabulary.first_seen_at.desc()).all()
+        return [{"id": v.id, "word": v.word, "definition": v.definition, "created_at": v.first_seen_at.isoformat() if v.first_seen_at else None} for v in vocab]
+    finally:
+        db.close()
+
+@app.post("/api/notebook")
+async def add_notebook_entry(payload: dict):
+    user_id = payload.get("user_id")
+    word = payload.get("word")
+    definition = payload.get("definition")
+    if not all([user_id, word, definition]):
+        return {"error": "Missing required fields"}
+    db = SessionLocal()
+    try:
+        new_vocab = Vocabulary(user_id=user_id, word=word, definition=definition)
+        db.add(new_vocab)
+        db.commit()
+        db.refresh(new_vocab)
+        return {"id": new_vocab.id, "word": new_vocab.word, "definition": new_vocab.definition, "created_at": new_vocab.first_seen_at.isoformat() if new_vocab.first_seen_at else None}
+    finally:
+        db.close()
+
+@app.delete("/api/notebook/{vocab_id}")
+async def delete_notebook_entry(vocab_id: int):
+    db = SessionLocal()
+    try:
+        vocab = db.query(Vocabulary).filter(Vocabulary.id == vocab_id).first()
+        if vocab:
+            db.delete(vocab)
+            db.commit()
+            return {"success": True}
+        return {"error": "Not found"}
+    finally:
+        db.close()

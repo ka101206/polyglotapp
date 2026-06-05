@@ -9,10 +9,24 @@ class STTEngine:
         self.sample_rate = 16000
         self.last_audio = None
 
-    def transcribe_audio(self, audio_bytes, target_language="en-US"):
-        # audio_bytes is expected to be a valid WAV format from the frontend
+    def transcribe_audio(self, audio_bytes, target_language="ja-JP"):
+        import subprocess
+        # Convert webm to wav via ffmpeg
         try:
-            with sr.AudioFile(io.BytesIO(audio_bytes)) as source:
+            process = subprocess.Popen(
+                ['ffmpeg', '-i', 'pipe:0', '-f', 'wav', 'pipe:1'],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+            wav_bytes, err = process.communicate(input=audio_bytes)
+            if process.returncode != 0:
+                print(f"FFMPEG Error: {err.decode('utf-8')}")
+                return "ERROR: Audio conversion failed."
+        except Exception as e:
+            print(f"Subprocess Error: {e}")
+            return f"ERROR: Subprocess {str(e)}"
+            
+        try:
+            with sr.AudioFile(io.BytesIO(wav_bytes)) as source:
                 audio = self.recognizer.record(source)
                 
             # Save the raw numpy array for pronunciation analysis

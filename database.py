@@ -11,7 +11,7 @@ DB_HOST = os.getenv("POSTGRES_HOST", "localhost")
 DB_PORT = os.getenv("POSTGRES_PORT", "5432")
 DB_NAME = os.getenv("POSTGRES_DB", "polyglot")
 
-DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+DATABASE_URL = os.getenv("DATABASE_URL", f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -24,6 +24,9 @@ class User(Base):
     username = Column(String(50), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    avg_chars_per_second = Column(Float, default=5.0)
+    total_chars_spoken = Column(Integer, default=0)
+    total_seconds_spoken = Column(Float, default=0.0)
     
     messages = relationship("Message", back_populates="user", cascade="all, delete-orphan")
     vocabularies = relationship("Vocabulary", back_populates="user", cascade="all, delete-orphan")

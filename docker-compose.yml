@@ -12,22 +12,22 @@ services:
       - pgdata:/var/lib/postgresql/data
     restart: always
 
-  vllm:
-    image: vllm/vllm-openai:latest
-    container_name: polyglot-vllm
-    command: --model Qwen/Qwen2.5-7B-Instruct --host 0.0.0.0 --port 8000
-    ports:
-      - "8000:8000"
-    volumes:
-      - ~/.cache/huggingface:/root/.cache/huggingface
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    restart: unless-stopped
+#  vllm:
+#    image: vllm/vllm-openai:latest
+#    container_name: polyglot-vllm
+#    command: --model Qwen/Qwen2.5-7B-Instruct --host 0.0.0.0 --port 8000 --enable-prefix-caching
+#    ports:
+#      - "8000:8000"
+#    volumes:
+#      - ~/.cache/huggingface:/root/.cache/huggingface
+#    deploy:
+#      resources:
+#        reservations:
+#          devices:
+#            - driver: nvidia
+#              count: all
+#              capabilities: [gpu]
+#    restart: unless-stopped
 
   backend:
     build: 
@@ -40,7 +40,8 @@ services:
       - .:/app
     environment:
       - DATABASE_URL=postgresql://polyglot:polyglot_secret@db:5432/polyglot
-      - VLLM_URL=http://vllm:8000/v1
+      - VLLM_URL=http://host.docker.internal:11434/v1
+      - AI_MODEL=qwen2.5
     depends_on:
       - db
     restart: always

@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y \
     cmake \
     libasound2-dev \
     ffmpeg \
+    flac \
     espeak-ng \
     && rm -rf /var/lib/apt/lists/*
 
