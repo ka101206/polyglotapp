@@ -265,20 +265,6 @@ User: "何は手伝いですますか" → Correction: 何か手伝いましょ�
 
         return f"{reading_prefix}{word}: {translation}"
 
-    # ---------- Pronunciation ----------
-
-    async def get_pronunciation_feedback(self, lang, analysis_data):
-        sp = f"""Expert {lang} pronunciation coach. Phrase: "{analysis_data['text']}"
-Scores: Overall={analysis_data['overall_score']}/100, Pitch={analysis_data['pitch_score']}/100, Stress={analysis_data['stress_score']}/100, Rhythm={analysis_data['rhythm_score']}/100
-Duration: {analysis_data['user_duration']}s (ref: {analysis_data['ref_duration']}s)
-Give 2-3 sentence feedback: assessment, one strength, one improvement area."""
-        try:
-            return await self._complete(
-                [{"role": "system", "content": sp}], temperature=0.7, max_tokens=100,
-            ), True
-        except Exception as e:
-            return f"Failed to generate feedback: {e}", False
-
     # ---------- Word Bank ----------
 
     async def generate_word_bank(self, ai_reply, target_language, include_decoys=False):

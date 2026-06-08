@@ -10,3 +10,4 @@ voices*.bin
 models/
 asset/
 *.safetensors
+_deprecated/

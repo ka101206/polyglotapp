@@ -2,7 +2,7 @@ import os
 from datetime import datetime
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, ForeignKey, Text, Date, text
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
-from pgvector.sqlalchemy import Vector
+
 
 # Database URL configuration
 DB_USER = os.getenv("POSTGRES_USER", "polyglot")
@@ -39,7 +39,6 @@ class Message(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     role = Column(String(20), nullable=False) # 'User', 'AI', 'System'
     content = Column(Text, nullable=False)
-    embedding = Column(Vector(384)) # all-MiniLM-L6-v2 uses 384 dimensions
     timestamp = Column(DateTime, default=datetime.utcnow)
     
     user = relationship("User", back_populates="messages")
@@ -80,10 +79,6 @@ class Analytic(Base):
     user = relationship("User", back_populates="analytics")
 
 def init_db():
-    # Attempt to create pgvector extension if it doesn't exist
-    with engine.connect() as conn:
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-        conn.commit()
     Base.metadata.create_all(bind=engine)
 
 def get_db():
