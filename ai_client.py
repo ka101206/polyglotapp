@@ -123,21 +123,21 @@ User: 相談があるんだけど、いいかな？ → もちろん！何でも
         full = ""
         async for delta, sentence, full_reply, ok, done in self._stream_sentences(messages):
             full = full_reply
+            
+            if done and ok:
+                self.conversation_history.append({"role": "user", "content": user_text})
+                self.conversation_history.append({"role": "assistant", "content": self._cleanup_text(full)})
+                
+                # Trigger History Summarization
+                if len(self.conversation_history) > 12:
+                    import asyncio
+                    old_messages = self.conversation_history[:6]
+                    self.conversation_history = self.conversation_history[6:]
+                    asyncio.create_task(self._summarize_history(old_messages))
+                    
             yield delta, sentence, full_reply, ok, done
             if not ok or done:
                 break
-
-        # Save history only on success
-        if full:
-            self.conversation_history.append({"role": "user", "content": user_text})
-            self.conversation_history.append({"role": "assistant", "content": self._cleanup_text(full)})
-            
-            # Trigger History Summarization
-            if len(self.conversation_history) > 12:
-                import asyncio
-                old_messages = self.conversation_history[:6]
-                self.conversation_history = self.conversation_history[6:]
-                asyncio.create_task(self._summarize_history(old_messages))
 
     # ---------- Scenarios ----------
 
@@ -167,20 +167,23 @@ RULES:
         full = ""
         async for delta, sentence, full_reply, ok, done in self._stream_sentences(messages):
             full = full_reply
+            
+            if done and ok:
+                self.scenario_history.append({"role": "assistant", "content": self._cleanup_text(full)})
+                if len(self.scenario_history) > 12:
+                    self.scenario_history = self.scenario_history[-12:]
+            
             yield delta, sentence, full_reply, ok, done
             if not ok or done:
                 break
 
-        if full:
-            self.scenario_history.append({"role": "assistant", "content": self._cleanup_text(full)})
-            if len(self.scenario_history) > 12:
-                self.scenario_history = self.scenario_history[-12:]
-        else:
+        if not full:
             # Remove the user message we appended if it failed
             if self.scenario_history and self.scenario_history[-1].get("role") == "user":
                 self.scenario_history.pop()
 
     async def _summarize_history(self, old_messages):
+        print(f"🔄 Starting background history summarization of {len(old_messages)} oldest messages...", flush=True)
         sp = f"""You are a memory module. Summarize the following past conversation into a brief, dense bulleted list of key facts, context, and user details.
 Existing Memory:
 {self.conversation_memory}
@@ -191,8 +194,9 @@ Include both the existing memory and new facts from the conversation."""
                 temperature=0.1, max_tokens=200
             )
             self.conversation_memory = summary
+            print(f"✅ History summarization complete! New memory block:\n{summary}", flush=True)
         except Exception as e:
-            print(f"Memory summarization error: {e}")
+            print(f"❌ Memory summarization error: {e}", flush=True)
 
     # ---------- Grammar ----------
 
