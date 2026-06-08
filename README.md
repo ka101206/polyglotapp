@@ -1,23 +1,29 @@
 # Polyglot AI Tutor
 
-A fully containerized, multi-lingual AI language tutor running inside a virtual Linux desktop. It uses Kokoro-ONNX, Piper-TTS, and Microsoft Edge-TTS engines to provide ultra-realistic speech synthesis in Japanese, Chinese, Korean, Spanish, French, and Italian — with AI-powered conversation, grammar tutoring, and vocabulary tracking.
+A modern, full-stack AI language learning web application. It features a React frontend and a FastAPI backend, leveraging advanced Text-to-Speech (TTS) engines like Kokoro-ONNX, Piper-TTS, and Microsoft Edge-TTS to provide ultra-realistic speech synthesis in Japanese, Chinese, Korean, Spanish, French, and Italian.
 
 ## Features
 
-- **AI Conversation** — Chat with an AI tutor in your target language with automatic text-to-speech responses
-- **Multi-Language TTS** — Natural speech synthesis powered by Kokoro (Japanese), Piper (European), and Edge-TTS (Chinese/Korean)
-- **Browser Audio Playback** — All TTS audio plays through your browser speakers with adjustable volume
-- **Native IME Input** — Type in Japanese, Chinese, Korean, etc. using your Mac's built-in input method directly in the app
-- **Grammar Tutor** — Double-click any AI response to get a detailed grammar breakdown, or ask follow-up questions
-- **Vocabulary Notebook** — Automatically saves new words with definitions; hover to review
-- **Conversation Mode** — Hands-free voice-to-voice practice with speech recognition
-- **Replay Controls** — Full and partial replay at adjustable speeds
+- **AI Conversation** — Chat with an AI tutor in your target language with automatic text-to-speech responses.
+- **Interactive Scenarios** — Practice real-world situations (e.g., Ordering at a Restaurant, Asking for Directions) with guided AI interactions.
+- **Multi-Language TTS** — Natural speech synthesis powered by Kokoro (Japanese), Piper (European), and Edge-TTS (Chinese/Korean).
+- **Word Dictionary & Translation** — Highlight any word or phrase in the chat to instantly see its translation and reading.
+- **Vocabulary Notebook** — Save highlighted words to a personal notebook for future review.
+- **Grammar & Pronunciation Feedback** — Receive inline grammar corrections and pronunciation hints from the AI tutor.
+- **Replay Controls** — Replay full messages or partial highlighted text at adjustable speeds to practice listening.
+- **Speech-to-Text (STT)** — Hands-free voice-to-voice practice using browser microphone APIs.
+
+## Tech Stack
+
+- **Frontend:** React, Vite, Tailwind CSS, Framer Motion
+- **Backend:** Python, FastAPI, WebSockets, SQLAlchemy (SQLite)
+- **AI/TTS:** OpenAI API, Kokoro-ONNX, Piper-TTS, Edge-TTS
 
 ## Getting Started
 
 ### 1. Download the AI Models
 
-The AI language models are large (300MB+) and not included in this repository. Download them using the provided script:
+The local TTS models are large (300MB+) and not included in this repository. Download them using the provided script:
 
 ```bash
 chmod +x download_models.sh
@@ -31,60 +37,45 @@ Or manually download and place these files:
 - `models/fr_FR-tom-medium.onnx`
 - `models/it_IT-riccardo-x_low.onnx`
 
-### 2. Run the Application
+### 2. Configure Environment
 
-```bash
-docker compose up -d
+Create a `.env` file in the project root to configure your OpenAI API key:
+
+```env
+OPENAI_API_KEY=your_api_key_here
 ```
 
-### 3. Open in Browser
+### 3. Run the Backend (FastAPI)
 
-Navigate to: **http://localhost:8080/vnc.html**
+You can run the backend natively or via Docker.
 
-The app auto-connects and scales to fit your browser window. No need to click "Connect".
-
-### 4. Remote Access (Share with others)
-
-Because the app routes all traffic (VNC, Audio, IME) through a single port (`8080`) via an internal Nginx proxy, you can easily share it over the internet using a tunneling service.
-
-The easiest way is using `localtunnel` (requires Node.js):
+**Native (Requires Python 3.11+):**
 ```bash
-npx localtunnel --port 8080
+pip install -r requirements.txt
+python main.py
 ```
-This will generate a public URL (e.g., `https://random-words.loca.lt`) that anyone can open in their browser to use the application remotely.
+The backend will run on `http://localhost:8081`.
 
-### 5. Typing in Other Languages
-
-To type in Japanese, Chinese, Korean, etc.:
-1. Switch your Mac's input source (e.g., via the menu bar or keyboard shortcut)
-2. Click the input field in the app
-3. Type normally — the IME composition preview appears in real-time
-4. Press Enter to finalize the composed text, then Enter again to send
-
-### Stopping the Application
-
+**Docker:**
 ```bash
-docker compose down
+docker build -t polyglot-backend -f backend.Dockerfile .
+docker run -p 8081:8081 --env-file .env polyglot-backend
 ```
 
-## Architecture
+### 4. Run the Frontend (React)
 
-The app runs in a Docker container with a virtual desktop (Xvfb + Fluxbox + x11vnc), served to your browser via noVNC. A custom HTML wrapper (`polyglot_vnc.html`) adds:
+Open a new terminal and navigate to the `frontend` directory:
 
-- **IME Support** — Transparent textarea overlay intercepts keyboard input for IME composition while forwarding regular keys to VNC
-- **Browser Audio Bridge** — HTTP server on port 8081 queues TTS audio files; browser JS polls and plays them via HTML5 Audio API
-- **Grammar/IME Controls** — HTTP endpoints for toggling the grammar tutor and handling text composition
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-## Key Files
+Navigate to `http://localhost:3000` (or the port provided by Vite) in your browser.
 
-| File | Purpose |
-|------|---------|
-| `gui.py` | Main Tkinter application with all UI and logic |
-| `tts_engine.py` | Japanese TTS (Kokoro-ONNX) |
-| `european_tts.py` | Spanish/French/Italian TTS (Piper) |
-| `chinese_tts.py` | Chinese TTS (Edge-TTS) |
-| `korean_tts.py` | Korean TTS (Edge-TTS) |
-| `ai_client.py` | AI conversation backend |
-| `stt_engine.py` | Speech-to-text engine |
-| `polyglot_vnc.html` | Custom noVNC page with IME + audio |
-| `start.sh` | Container startup script |
+## Key Architecture
+
+- **WebSockets:** The chat interface uses real-time WebSockets to stream AI responses, audio chunks, and grammar corrections concurrently for zero latency.
+- **Frontend Components:** The React UI is modularized (e.g., `ChatUI`, `MessageList`, `Sidebar`) and memoized for optimal rendering performance when streaming text.
+- **Audio Queue:** Audio binary data is streamed via WebSockets and played seamlessly using a custom Web Audio API queue.
