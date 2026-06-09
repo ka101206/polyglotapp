@@ -22,6 +22,8 @@ export default function ChatUI({ user, onLogout }) {
   const [notebook, setNotebook] = useState([]);
   const [micSensitivity, setMicSensitivity] = useState(50);
   const [silenceTimeout, setSilenceTimeout] = useState(2.5);
+  const [enableGrammar, setEnableGrammar] = useState(() => localStorage.getItem('polyglot_enable_grammar') !== 'false');
+  const [enableWordBank, setEnableWordBank] = useState(() => localStorage.getItem('polyglot_enable_word_bank') !== 'false');
   const [showSettings, setShowSettings] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -142,7 +144,7 @@ export default function ChatUI({ user, onLogout }) {
     replayText,
     sendTutorMessage,
     triggerScenario
-  } = useChatWebSocket(user.user_id, language, difficulty, readingMode, ttsSpeed, (words) => {
+  } = useChatWebSocket(user.user_id, language, difficulty, readingMode, ttsSpeed, enableGrammar, enableWordBank, (words) => {
     setWordBankPool(words);
     setAssembledWords([]);
   });
@@ -286,6 +288,16 @@ export default function ChatUI({ user, onLogout }) {
           setMicSensitivity={setMicSensitivity}
           silenceTimeout={silenceTimeout}
           setSilenceTimeout={setSilenceTimeout}
+          enableGrammar={enableGrammar}
+          setEnableGrammar={(val) => {
+            setEnableGrammar(val);
+            localStorage.setItem('polyglot_enable_grammar', val);
+          }}
+          enableWordBank={enableWordBank}
+          setEnableWordBank={(val) => {
+            setEnableWordBank(val);
+            localStorage.setItem('polyglot_enable_word_bank', val);
+          }}
         />
 
         {showAnalytics && <AnalyticsDashboard user={user} onClose={() => setShowAnalytics(false)} />}

@@ -201,7 +201,7 @@ export function InlineFeedbackPopup({
             type="text"
             value={tutorInput}
             onChange={(e) => setTutorInput(e.target.value)}
-            placeholder="Ask why you were wrong..."
+            placeholder="Ask a question about this..."
             className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
           />
           <button

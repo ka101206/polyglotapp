@@ -80,7 +80,7 @@ const MessageList = memo(function MessageList({
             ? 'bg-blue-600 text-white rounded-tr-none shadow-blue-500/20' 
             : 'bg-slate-800 text-slate-100 rounded-tl-none border border-slate-700/50 shadow-xl'
         } shadow-lg text-[15px] leading-relaxed`}>
-          {m.role === 'user' && (m.grammar || m.pronunciation) && (
+          {m.role === 'user' && ((m.grammar && m.grammar.replace(/[^a-zA-Z]/g, '').toUpperCase() !== 'PERFECT') || m.pronunciation) && (
             <button 
               onClick={() => setInlineFeedbackPopup(m)}
               className="absolute -left-12 top-2 p-2 bg-slate-800 text-amber-400 rounded-full shadow-lg border border-slate-700 hover:bg-slate-700 hover:text-amber-300 transition-colors z-10"

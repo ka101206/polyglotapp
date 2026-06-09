@@ -52,8 +52,8 @@ class AIClient:
         )
         return response.choices[0].message.content.strip()
 
-    async def _stream_sentences(self, messages, temperature=0.2, max_tokens=60):
-        """Async generator that yields (text_delta, sentence_text, full_reply, success, is_done)."""
+    async def _stream_sentences(self, messages, temperature=0.2, max_tokens=150):
+        """Async generator that yields (text_delta, sentence_text, full_reply, success, is_done, extras)."""
         try:
             stream = await self.client.chat.completions.create(
                 model=self.model,
@@ -63,46 +63,72 @@ class AIClient:
                 stream=True,
             )
 
-            full_reply = ""
+            full_text = ""
+            yielded_len = 0
             sentence_buf = ""
+            safe_reply = ""
 
             async for chunk in stream:
                 if chunk.choices and chunk.choices[0].delta.content:
                     token = chunk.choices[0].delta.content
-                    full_reply += token
-                    sentence_buf += token
+                    full_text += token
 
-                    is_end = any(t in token for t in self.SENTENCE_TERMINATORS)
-                    yield token, (sentence_buf if is_end else ""), full_reply, True, False
-                    if is_end:
-                        sentence_buf = ""
+                    reply_part = full_text
+                        
+                    safe_reply = reply_part
+                    safe_reply = re.sub(r'\[GOAL_REACHED\]', '', safe_reply, flags=re.IGNORECASE)
+                    safe_reply = re.sub(r'\[PERFECT\]', '', safe_reply, flags=re.IGNORECASE)
+                    
+                    last_bracket = safe_reply.rfind("[")
+                    if last_bracket != -1 and safe_reply.find("]", last_bracket) == -1:
+                        safe_reply = safe_reply[:last_bracket]
+                        
+                    safe_reply = safe_reply.lstrip()
+                    
+                    if len(safe_reply) > yielded_len:
+                        new_delta = safe_reply[yielded_len:]
+                        yielded_len = len(safe_reply)
+                        
+                        sentence_buf += new_delta
+                        is_end = any(t in new_delta for t in self.SENTENCE_TERMINATORS)
+                        
+                        yield new_delta, (sentence_buf if is_end else ""), safe_reply, True, False, {}
+                        if is_end:
+                            sentence_buf = ""
 
             # Flush remaining
             if sentence_buf.strip():
-                yield "", sentence_buf, full_reply, True, False
+                yield "", sentence_buf, safe_reply, True, False, {}
+
+            # Parse extras at the end
+            extras = {"goal_reached": False}
+            if re.search(r'\[GOAL_REACHED\]', full_text, re.IGNORECASE):
+                extras["goal_reached"] = True
 
             # Done signal
-            yield "", "", full_reply, True, True
+            yield "", "", safe_reply, True, True, extras
 
         except Exception as e:
-            yield f"Error: {e}", "", "", False, True
+            import traceback
+            traceback.print_exc()
+            yield f"Error: {e}", "", "", False, True, {}
 
     # ---------- Chat ----------
 
-    async def get_reply_stream(self, user_text, target_language, difficulty="Intermediate"):
+    async def get_reply_stream(self, user_text, target_language, difficulty="Intermediate", enable_grammar=True, enable_word_bank=True):
         system_prompt = f"""ROLE: Human text-message language partner. NOT an AI assistant. Brief, natural, conversational.
 
 RULES:
 1. Max 30 words, 1-2 sentences. No lists or essays.
 2. MIRROR the user's formality exactly. Formal→formal, casual→casual. Never mix.
-3. Speak ONLY in {target_language}. 100% immersion, no language mixing.
+3. ABSOLUTE LANGUAGE RULE: Speak 100% ONLY in {target_language}. DO NOT use Romaji for {target_language} words. Use Katakana for foreign loanwords. You may use English letters ONLY for established acronyms (e.g. EV, OK, IT). No Chinese Hanzi either. If the user speaks another language, reply strictly in {target_language}.
 4. No violent/explicit/R-18 content.
 """
         if target_language == "Japanese":
             system_prompt += """JAPANESE RULES:
 - Formal triggers (です/ます/でしょうか) → reply in 丁寧語
 - Casual triggers (だ/俺/さ/よ) → reply in タメ口, zero です/ます
-- No Romaji. Pure Japanese only.
+- No Romaji. No Chinese Hanzi. Use Katakana for loanwords. You may use English letters ONLY for established acronyms (e.g. EV, OK, IT).
 
 EXAMPLES:
 User: 相談があるんですが、いいでしょうか？ → もちろんです！どのようなご相談ですか？
@@ -116,26 +142,25 @@ User: 相談があるんだけど、いいかな？ → もちろん！何でも
         if self.conversation_memory:
             system_prompt += f"\n\n[PREVIOUS CONTEXT SUMMARY]\n{self.conversation_memory}\n"
 
+        system_prompt += "\n\nCRITICAL OUTPUT FORMATTING:\nOutput ONLY your conversational reply, without any prefixes, tags, or markdown blocks."
+
         messages = [{"role": "system", "content": system_prompt}]
         messages.extend(self.conversation_history)
         messages.append({"role": "user", "content": user_text})
 
         full = ""
-        async for delta, sentence, full_reply, ok, done in self._stream_sentences(messages):
+        async for delta, sentence, full_reply, ok, done, extras in self._stream_sentences(messages):
             full = full_reply
             
             if done and ok:
                 self.conversation_history.append({"role": "user", "content": user_text})
                 self.conversation_history.append({"role": "assistant", "content": self._cleanup_text(full)})
                 
-                # Trigger History Summarization
+                # Sliding Window History
                 if len(self.conversation_history) > 12:
-                    import asyncio
-                    old_messages = self.conversation_history[:6]
-                    self.conversation_history = self.conversation_history[6:]
-                    asyncio.create_task(self._summarize_history(old_messages))
+                    self.conversation_history = self.conversation_history[-12:]
                     
-            yield delta, sentence, full_reply, ok, done
+            yield delta, sentence, full_reply, ok, done, extras
             if not ok or done:
                 break
 
@@ -144,7 +169,7 @@ User: 相談があるんだけど、いいかな？ → もちろん！何でも
     def start_scenario(self, intro_text):
         self.scenario_history = [{"role": "assistant", "content": intro_text}]
 
-    async def get_scenario_reply_stream(self, user_text, target_language, difficulty, scenario_dict):
+    async def get_scenario_reply_stream(self, user_text, target_language, difficulty, scenario_dict, enable_grammar=True, enable_word_bank=True):
         self.scenario_history.append({"role": "user", "content": user_text})
 
         handholding = (
@@ -157,15 +182,19 @@ User: 相談があるんだけど、いいかな？ → もちろん！何でも
 User is: {scenario_dict['user_role']}. Goal: {scenario_dict['goal']}
 
 RULES:
-1. Stay in character. 100% {target_language}, no English, no Romaji.
-2. Max 30 words. {handholding}
-3. If user FULLY achieves their goal, append "[GOAL_REACHED]" to your response. Only if goal is conclusively met.
-"""
+1. Stay in character. 
+2. ABSOLUTE LANGUAGE RULE: Speak 100% ONLY in {target_language}. DO NOT use Romaji for {target_language} words. Use Katakana for foreign loanwords. You may use English letters ONLY for established acronyms (e.g. EV, OK, IT). No Chinese Hanzi either.
+3. Max 30 words. {handholding}
+4. If user FULLY achieves their goal, append "[GOAL_REACHED]" to your response. Only if goal is conclusively met.
+
+CRITICAL OUTPUT FORMATTING:
+Output ONLY your conversational reply, without any prefixes, tags, or markdown blocks."""
+
         messages = [{"role": "system", "content": system_prompt}]
         messages.extend(self.scenario_history)
 
         full = ""
-        async for delta, sentence, full_reply, ok, done in self._stream_sentences(messages):
+        async for delta, sentence, full_reply, ok, done, extras in self._stream_sentences(messages):
             full = full_reply
             
             if done and ok:
@@ -173,30 +202,15 @@ RULES:
                 if len(self.scenario_history) > 12:
                     self.scenario_history = self.scenario_history[-12:]
             
-            yield delta, sentence, full_reply, ok, done
+            yield delta, sentence, full_reply, ok, done, extras
             if not ok or done:
                 break
 
         if not full:
-            # Remove the user message we appended if it failed
             if self.scenario_history and self.scenario_history[-1].get("role") == "user":
                 self.scenario_history.pop()
 
-    async def _summarize_history(self, old_messages):
-        print(f"🔄 Starting background history summarization of {len(old_messages)} oldest messages...", flush=True)
-        sp = f"""You are a memory module. Summarize the following past conversation into a brief, dense bulleted list of key facts, context, and user details.
-Existing Memory:
-{self.conversation_memory}
-Include both the existing memory and new facts from the conversation."""
-        try:
-            summary = await self._complete(
-                [{"role": "system", "content": sp}] + old_messages,
-                temperature=0.1, max_tokens=200
-            )
-            self.conversation_memory = summary
-            print(f"✅ History summarization complete! New memory block:\n{summary}", flush=True)
-        except Exception as e:
-            print(f"❌ Memory summarization error: {e}", flush=True)
+
 
     # ---------- Grammar ----------
 
@@ -271,14 +285,14 @@ User: "何は手伝いですますか" → Correction: 何か手伝いましょ�
 
     # ---------- Word Bank ----------
 
-    async def generate_word_bank(self, ai_reply, target_language, include_decoys=False):
-        cache_key = f"{target_language}:{ai_reply.strip().lower()}:{include_decoys}"
+    async def generate_word_bank(self, reply_text, target_language, include_decoys=False):
+        cache_key = f"{target_language}:{reply_text.strip().lower()}:{include_decoys}"
         if cache_key in self.word_bank_cache:
             return self.word_bank_cache[cache_key], True
 
         count = 15 if include_decoys else 10
-        sp = f"""The AI just said: "{ai_reply}".
-Provide a comma-separated list of {count} words/tokens in {target_language} that the user could use to build a natural reply.
+        sp = f"""You are a helpful language tutor. Based on this text from the AI: '{reply_text}'
+Provide exactly {count} useful vocabulary words in {target_language} (NO CHINESE HANZI, NO ENGLISH) that the user could use to reply.
 Mix nouns, verbs, particles, and punctuation. Do NOT use Romaji/Pinyin. Output ONLY the {target_language} comma-separated list, nothing else."""
         try:
             raw = await self._complete(
@@ -302,6 +316,51 @@ Mix nouns, verbs, particles, and punctuation. Do NOT use Romaji/Pinyin. Output O
         except Exception as e:
             print(f"Word bank error: {e}")
             return [], False
+
+    async def analyze_grammar(self, user_text, target_language, difficulty):
+        cache_key = f"grammar:{target_language}:{user_text.strip().lower()}"
+        if cache_key in self.word_bank_cache:
+            return self.word_bank_cache[cache_key], True
+
+        sp = f"""You are a strict {target_language} grammar checker.
+Analyze the following sentence from a language learner: "{user_text}"
+
+You MUST respond in this exact format:
+Grammar Correct: [YES or NO]
+Correction: [The corrected sentence, if NO. If YES, leave blank]
+Explanation: [Write your explanation ENTIRELY IN ENGLISH. You are strictly forbidden from using Romaji (e.g. do NOT write "arimasu" or "ga"). Use Kana/Kanji for {target_language} words, but all other words MUST be English.]"""
+        try:
+            raw = await self._complete(
+                messages=[
+                    {"role": "system", "content": sp}
+                ],
+                temperature=0.1,
+                max_tokens=200
+            )
+            raw = raw.strip()
+            
+            if "Grammar Correct: [YES]" in raw or "Grammar Correct: YES" in raw:
+                raw = "PERFECT"
+            else:
+                correction = ""
+                explanation = ""
+                for line in raw.split("\n"):
+                    if line.startswith("Correction:"):
+                        correction = line.replace("Correction:", "").strip().strip("[]")
+                    elif line.startswith("Explanation:"):
+                        explanation = line.replace("Explanation:", "").strip().strip("[]")
+                
+                if correction and explanation:
+                    raw = f"Correction: {correction}\n\nExplanation: {explanation}"
+                elif correction:
+                    raw = f"Correction: {correction}"
+                elif explanation:
+                    raw = f"Explanation: {explanation}"
+
+            self.word_bank_cache[cache_key] = raw
+            return raw, True
+        except Exception as e:
+            return None, False
 
     # ---------- Grammar Tutor Chat ----------
 

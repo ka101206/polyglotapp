@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-export default function useChatWebSocket(user_id, language, difficulty, readingMode, ttsSpeed, onWordBankReceived) {
+export default function useChatWebSocket(user_id, language, difficulty, readingMode, ttsSpeed, enableGrammar, enableWordBank, onWordBankReceived) {
   const [messages, setMessages] = useState([]);
   const [isThinking, setIsThinking] = useState(false);
   const [isAiSpeaking, setIsAiSpeaking] = useState(false);
@@ -205,12 +205,14 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
       difficulty,
       scenario: activeScenarioRef.current,
       reading_mode: readingMode,
-      speed: ttsSpeed
+      speed: ttsSpeed,
+      enable_grammar: enableGrammar,
+      enable_word_bank: enableWordBank
     }));
 
     setIsThinking(true);
     if (onWordBankRef.current) onWordBankRef.current([]);
-  }, [language, difficulty, readingMode, ttsSpeed]);
+  }, [language, difficulty, readingMode, ttsSpeed, enableGrammar, enableWordBank]);
 
   const replayText = useCallback((text, speed) => {
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
@@ -243,10 +245,15 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
             language,
             difficulty,
             reading_mode: readingMode,
-            speed: ttsSpeed
+            speed: ttsSpeed,
+            enable_grammar: enableGrammar,
+            enable_word_bank: enableWordBank
         }));
     }
-  }, [language, difficulty, readingMode, ttsSpeed]);
+    
+    // Clear any previous word bank pool
+    if (onWordBankRef.current) onWordBankRef.current([]);
+  }, [language, difficulty, readingMode, ttsSpeed, enableGrammar, enableWordBank]);
 
   return {
     messages,

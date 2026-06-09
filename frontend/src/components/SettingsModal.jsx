@@ -13,7 +13,11 @@ export default function SettingsModal({
   micSensitivity,
   setMicSensitivity,
   silenceTimeout,
-  setSilenceTimeout
+  setSilenceTimeout,
+  enableGrammar,
+  setEnableGrammar,
+  enableWordBank,
+  setEnableWordBank
 }) {
   if (!showSettings) return null;
 
@@ -106,6 +110,24 @@ export default function SettingsModal({
               <span className="text-xs font-medium text-slate-300">{silenceTimeout.toFixed(1)}s</span>
             </div>
             <input type="range" min="1.0" max="10.0" step="0.5" value={silenceTimeout} onChange={(e) => setSilenceTimeout(parseFloat(e.target.value))} className="w-full accent-blue-500" />
+          </div>
+
+          <div className="pt-4 border-t border-slate-800 space-y-4">
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="text-sm font-medium text-slate-300">Enable Grammar Tutor</span>
+              <div className="relative">
+                <input type="checkbox" className="sr-only peer" checked={enableGrammar} onChange={(e) => setEnableGrammar(e.target.checked)} />
+                <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+              </div>
+            </label>
+
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="text-sm font-medium text-slate-300">Enable Word Bank</span>
+              <div className="relative">
+                <input type="checkbox" className="sr-only peer" checked={enableWordBank} onChange={(e) => setEnableWordBank(e.target.checked)} />
+                <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+              </div>
+            </label>
           </div>
 
         </div>

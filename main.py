@@ -126,11 +126,23 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
             await websocket.send_json({"type": "audio", "data": encoded})
 
     async def fetch_word_bank(reply_text, lang, diff):
-        if "Beginner" in diff or "Elementary" in diff:
-            include_decoys = "Elementary" in diff
-            words, ok = await ai_client.generate_word_bank(reply_text, lang, include_decoys)
-            if ok and words:
-                await websocket.send_json({"type": "word_bank", "words": words})
+        if "Advanced" in diff:
+            return
+            
+        include_decoys = "Elementary" in diff
+        words, ok = await ai_client.generate_word_bank(reply_text, lang, include_decoys)
+        if ok and words:
+            await websocket.send_json({"type": "word_bank", "words": words})
+
+    async def fetch_grammar(user_text, lang, diff, scenario):
+        grammar, ok = await ai_client.analyze_grammar(user_text, lang, diff)
+        print(f"[DEBUG] fetch_grammar output: '{grammar}'", flush=True)
+        if ok and grammar:
+            if grammar.strip() != "PERFECT":
+                analytics_manager.add_mistake()
+                if scenario:
+                    scenario_grammar_errors.append(grammar)
+            await websocket.send_json({"type": "grammar", "content": grammar})
 
     try:
         while True:
@@ -188,7 +200,10 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
                 req_speed = float(payload.get("speed", 1.0))
                 await send_audio(reply, req_speed, language)
                 await websocket.send_json({"type": "audio_done"})
-                asyncio.create_task(fetch_word_bank(reply, language, difficulty))
+                
+                enable_word_bank = payload.get("enable_word_bank", True)
+                if enable_word_bank:
+                    asyncio.create_task(fetch_word_bank(reply, language, difficulty))
                 continue
 
             # --- Normal / Scenario Chat ---
@@ -198,6 +213,9 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
             scenario = payload.get("scenario")
             reading_mode = payload.get("reading_mode", "なし")
             req_speed = float(payload.get("speed", 1.0))
+            enable_grammar = payload.get("enable_grammar", True)
+            enable_word_bank = payload.get("enable_word_bank", True)
+            print(f"[DEBUG] Chat payload received: enable_grammar={enable_grammar}")
 
             # Track speaking analytics
             duration = payload.get("duration")
@@ -217,20 +235,9 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
             # Pick the right generator
             if scenario:
                 scenario_dict = config.SCENARIOS.get(scenario)
-                generator = ai_client.get_scenario_reply_stream(user_text, language, difficulty, scenario_dict)
+                generator = ai_client.get_scenario_reply_stream(user_text, language, difficulty, scenario_dict, enable_grammar, enable_word_bank)
             else:
-                generator = ai_client.get_reply_stream(user_text, language, difficulty)
-
-            # Fire grammar check in background
-            async def _grammar_check():
-                grammar = await ai_client.get_grammar_correction(user_text, language)
-                if grammar:
-                    if grammar != "PERFECT":
-                        analytics_manager.add_mistake()
-                        if scenario:
-                            scenario_grammar_errors.append(grammar)
-                    await websocket.send_json({"type": "grammar", "content": grammar})
-            asyncio.create_task(_grammar_check())
+                generator = ai_client.get_reply_stream(user_text, language, difficulty, enable_grammar, enable_word_bank)
 
             # --- Stream LLM → UI + Audio ---
             use_furigana = needs_furigana(reading_mode)
@@ -248,7 +255,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
 
             audio_task = asyncio.create_task(_audio_worker())
 
-            async for text_delta, sentence, full_reply, ok, done in generator:
+            async for text_delta, sentence, full_reply, ok, done, extras in generator:
                 if not ok:
                     await websocket.send_json({"type": "error", "content": text_delta})
                     break
@@ -256,6 +263,8 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
                 if done:
                     final_full_reply = full_reply
                     success = True
+                    if extras.get("goal_reached"):
+                        goal_reached = True
                     break
 
                 # Stream text to UI
@@ -267,12 +276,6 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
                     clean = ai_client._cleanup_text(sentence)
                     if not clean:
                         continue
-
-                    if "[GOAL_REACHED]" in clean:
-                        goal_reached = True
-                        clean = clean.replace("[GOAL_REACHED]", "").strip()
-                        if not clean:
-                            continue
 
                     # If furigana mode, send the processed sentence now
                     if use_furigana:
@@ -290,7 +293,11 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
 
                 if final_full_reply:
                     clean_reply = final_full_reply.replace("[GOAL_REACHED]", "").strip()
-                    asyncio.create_task(fetch_word_bank(clean_reply, language, difficulty))
+                    print(f"[DEBUG] Creating fetch tasks. enable_grammar={enable_grammar}", flush=True)
+                    if enable_grammar:
+                        asyncio.create_task(fetch_grammar(user_text, language, difficulty, scenario))
+                    if enable_word_bank:
+                        asyncio.create_task(fetch_word_bank(clean_reply, language, difficulty))
 
                 if goal_reached or "[GOAL_REACHED]" in (final_full_reply or ""):
                     analytics_manager.add_fluency_score(random.randint(70, 95))
@@ -308,10 +315,10 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
     except WebSocketDisconnect:
         pass
     except Exception as e:
-        print(f"WebSocket Error: {e}")
+        print(f"WebSocket Error: {e}", flush=True)
         traceback.print_exc()
     finally:
-        print(f"Client {user_id} disconnected")
+        print(f"Client {user_id} disconnected", flush=True)
 
 # ---------- REST endpoints ----------
 
