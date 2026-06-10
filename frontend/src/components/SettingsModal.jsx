@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Settings, X } from 'lucide-react';
 
 export default function SettingsModal({
+  user,
+  onLogout,
   showSettings,
   setShowSettings,
   language,
@@ -19,7 +21,23 @@ export default function SettingsModal({
   enableWordBank,
   setEnableWordBank
 }) {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
   if (!showSettings) return null;
+
+  const handleDeleteAccount = async () => {
+    try {
+      const res = await fetch(`/api/users/${user.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        onLogout();
+      } else {
+        alert("Failed to delete account");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error deleting account");
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -128,6 +146,35 @@ export default function SettingsModal({
                 <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
               </div>
             </label>
+          </div>
+
+          <div className="pt-4 border-t border-slate-800 space-y-4">
+            {!showDeleteConfirm ? (
+              <button 
+                onClick={() => setShowDeleteConfirm(true)}
+                className="w-full py-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/50 rounded-xl font-medium transition-colors"
+              >
+                Delete Account
+              </button>
+            ) : (
+              <div className="bg-red-500/10 border border-red-500/50 rounded-xl p-4 space-y-3">
+                <p className="text-sm text-red-400 font-medium text-center">Are you sure? This will permanently delete your account, vocabulary, and all analytics data.</p>
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => setShowDeleteConfirm(false)}
+                    className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-medium transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={handleDeleteAccount}
+                    className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors"
+                  >
+                    Yes, Delete
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
         </div>

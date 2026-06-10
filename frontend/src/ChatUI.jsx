@@ -276,6 +276,8 @@ export default function ChatUI({ user, onLogout }) {
         />
 
         <SettingsModal 
+          user={user}
+          onLogout={onLogout}
           showSettings={showSettings}
           setShowSettings={setShowSettings}
           language={language}

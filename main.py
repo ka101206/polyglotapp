@@ -322,6 +322,19 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
 
 # ---------- REST endpoints ----------
 
+@app.delete("/api/users/{user_id}")
+async def delete_user(user_id: int):
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if user:
+            db.delete(user)
+            db.commit()
+            return {"success": True}
+        return {"error": "Not found"}
+    finally:
+        db.close()
+
 @app.post("/api/ai/definition")
 async def get_definition(payload: dict):
     word = payload.get("word")
