@@ -3,6 +3,7 @@ import { Settings, X } from 'lucide-react';
 
 export default function SettingsModal({
   user,
+  setUser,
   onLogout,
   showSettings,
   setShowSettings,
@@ -22,12 +23,69 @@ export default function SettingsModal({
   setEnableWordBank
 }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [newUsername, setNewUsername] = useState('');
+  const [isUpdatingUsername, setIsUpdatingUsername] = useState(false);
+  const [newNickname, setNewNickname] = useState('');
+  const [isUpdatingNickname, setIsUpdatingNickname] = useState(false);
 
   if (!showSettings) return null;
 
+  const handleUpdateNickname = async () => {
+    if (!newNickname.trim()) return;
+    setIsUpdatingNickname(true);
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8081';
+      const res = await fetch(`${apiUrl}/api/users/${user.user_id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nickname: newNickname.trim() })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setUser(data);
+        setNewNickname('');
+        alert("Nickname saved successfully!");
+      } else {
+        alert(data.detail || "Failed to update nickname");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error updating nickname");
+    } finally {
+      setIsUpdatingNickname(false);
+    }
+  };
+
+  const handleUpdateUsername = async () => {
+    if (!newUsername.trim()) return;
+    setIsUpdatingUsername(true);
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8081';
+      const res = await fetch(`${apiUrl}/api/users/${user.user_id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: newUsername.trim() })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setUser(data);
+        setNewUsername('');
+        alert("Username updated successfully!");
+      } else {
+        alert(data.detail || "Failed to update username");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error updating username");
+    } finally {
+      setIsUpdatingUsername(false);
+    }
+  };
+
   const handleDeleteAccount = async () => {
     try {
-      const res = await fetch(`/api/users/${user.id}`, { method: 'DELETE' });
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8081';
+      const res = await fetch(`${apiUrl}/api/users/${user.user_id}`, { method: 'DELETE' });
       if (res.ok) {
         onLogout();
       } else {
@@ -114,6 +172,16 @@ export default function SettingsModal({
             </div>
           )}
 
+          {language === 'Chinese' && (
+            <div className="space-y-3">
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Reading Help</label>
+              <select value={readingMode} onChange={(e) => setReadingMode(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 outline-none focus:border-blue-500 transition-colors">
+                <option value="なし">None (Hanzi)</option>
+                <option value="拼音">Pinyin</option>
+              </select>
+            </div>
+          )}
+
           <div className="space-y-3">
             <div className="flex justify-between items-center">
               <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Mic Sensitivity</label>
@@ -146,6 +214,48 @@ export default function SettingsModal({
                 <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
               </div>
             </label>
+          </div>
+
+          <div className="pt-4 border-t border-slate-800 space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Change Username</label>
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  placeholder={user?.username || "New username"}
+                  value={newUsername}
+                  onChange={(e) => setNewUsername(e.target.value)}
+                  className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                />
+                <button 
+                  onClick={handleUpdateUsername}
+                  disabled={!newUsername.trim() || isUpdatingUsername}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 disabled:text-white/50 text-white rounded-xl text-sm font-medium transition-colors"
+                >
+                  {isUpdatingUsername ? "Updating..." : "Update"}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Nickname</label>
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  placeholder={user?.nickname || "Nickname"}
+                  value={newNickname}
+                  onChange={(e) => setNewNickname(e.target.value)}
+                  className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                />
+                <button 
+                  onClick={handleUpdateNickname}
+                  disabled={!newNickname.trim() || isUpdatingNickname}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-600/50 disabled:text-white/50 text-white rounded-xl text-sm font-medium transition-colors"
+                >
+                  {isUpdatingNickname ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </div>
           </div>
 
           <div className="pt-4 border-t border-slate-800 space-y-4">

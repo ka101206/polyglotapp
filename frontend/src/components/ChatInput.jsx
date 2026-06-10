@@ -55,12 +55,12 @@ export default function ChatInput({
       
       <div className="flex items-center gap-2 mb-2">
 
-        <div className="flex items-center gap-2 bg-slate-800/50 px-2 py-1.5 rounded-lg border border-slate-700/50 shrink-0 w-48">
-          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">Voice: {ttsSpeed.toFixed(1)}x</span>
+        <div className="flex items-center gap-2 bg-slate-800/50 px-3 py-1.5 rounded-lg border border-slate-700/50 shrink-0 w-72">
+          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap min-w-[65px]">Voice: {ttsSpeed.toFixed(1)}x</span>
           <input type="range" min="0.5" max="2.0" step="0.1" value={ttsSpeed} onChange={(e) => setTtsSpeed(parseFloat(e.target.value))} className="w-full accent-blue-500" />
         </div>
-        <div className="flex items-center gap-2 bg-slate-800/50 px-2 py-1.5 rounded-lg border border-slate-700/50 shrink-0 w-48">
-          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">Replay: {replaySpeed.toFixed(1)}x</span>
+        <div className="flex items-center gap-2 bg-slate-800/50 px-3 py-1.5 rounded-lg border border-slate-700/50 shrink-0 w-72">
+          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap min-w-[65px]">Replay: {replaySpeed.toFixed(1)}x</span>
           <input type="range" min="0.5" max="2.0" step="0.1" value={replaySpeed} onChange={(e) => setReplaySpeed(parseFloat(e.target.value))} className="w-full accent-blue-500" />
         </div>
 

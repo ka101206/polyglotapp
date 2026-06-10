@@ -22,6 +22,8 @@ class AIClient:
         self.conversation_memory = ""
         self.scenario_memory = ""
         
+        self.current_register = "FORMAL"
+        
         self.grammar_cache = {}
         self.word_bank_cache = {}
 
@@ -113,31 +115,121 @@ class AIClient:
             traceback.print_exc()
             yield f"Error: {e}", "", "", False, True, {}
 
+    # ---------- Formality Detection ----------
+
+    def _detect_formality(self, text, language):
+        """Programmatically detect if user's text is formal or casual."""
+        text = text.strip()
+        if not text:
+            return None  # can't determine
+
+        if language == "Japanese":
+            # Formal indicators: です, ます, ください, でしょう, ございます
+            formal_patterns = [r'です[。？?！!、\s]*$', r'ます[。？?！!、\s]*$', r'ません', r'ました', r'ください', r'でしょう', r'ございます']
+            for p in formal_patterns:
+                if re.search(p, text):
+                    return "FORMAL"
+            # If text is just a greeting like こんにちは, treat as neutral
+            if text in ('こんにちは', 'おはよう', 'こんばんは', 'やあ', 'よう'):
+                return None
+            # Everything else = casual (plain form verbs, だ, etc.)
+            if len(text) >= 2:
+                return "CASUAL"
+
+        elif language == "Korean":
+            # Formal indicators: 요, 습니다, 세요, ㅂ니다
+            if re.search(r'[요세][\s。？?！!]*$', text) or '습니다' in text or 'ㅂ니다' in text:
+                return "FORMAL"
+            # Neutral greetings
+            if text in ('안녕하세요',):
+                return "FORMAL"
+            if text in ('안녕',):
+                return "CASUAL"
+            # Everything without 요 ending = casual
+            if len(text) >= 2:
+                return "CASUAL"
+
+        elif language == "Chinese":
+            if '您' in text:
+                return "FORMAL"
+            if '你' in text:
+                return "CASUAL"
+
+        return None
+
     # ---------- Chat ----------
 
-    async def get_reply_stream(self, user_text, target_language, difficulty="Intermediate", enable_grammar=True, enable_word_bank=True):
+    async def get_reply_stream(self, user_text, target_language, difficulty="Intermediate", enable_grammar=True, enable_word_bank=True, user_name=None):
+        # Detect and track formality register
+        # Reset register if language changed
+        last_lang = getattr(self, '_last_language', None)
+        if last_lang and last_lang != target_language:
+            self.current_register = "FORMAL"
+        self._last_language = target_language
+
+        detected = self._detect_formality(user_text, target_language)
+        if detected:
+            self.current_register = detected
+
+        register = self.current_register
+
         system_prompt = f"""ROLE: Human text-message language partner. NOT an AI assistant. Brief, natural, conversational.
 
 RULES:
 1. Max 30 words, 1-2 sentences. No lists or essays.
-2. MIRROR the user's formality exactly. Formal→formal, casual→casual. Never mix.
-3. ABSOLUTE LANGUAGE RULE: Speak 100% ONLY in {target_language}. DO NOT use Romaji for {target_language} words. Use Katakana for foreign loanwords. You may use English letters ONLY for established acronyms (e.g. EV, OK, IT). No Chinese Hanzi either. If the user speaks another language, reply strictly in {target_language}.
-4. No violent/explicit/R-18 content.
+2. FORMALITY: You MUST use the register indicated by [REGISTER: ...] in the user's message. This is NON-NEGOTIABLE.
+3. ABSOLUTE LANGUAGE RULE: Speak 100% ONLY in {target_language}. ZERO English words. ZERO Romaji. ZERO Pinyin. Write ONLY in the native script of {target_language}. Even a single English word is a failure.
+4. Do NOT ask the user for their name.
+5. No violent/explicit/R-18 content.
 """
         if target_language == "Japanese":
-            system_prompt += """JAPANESE RULES:
-- Formal triggers (です/ます/でしょうか) → reply in 丁寧語
-- Casual triggers (だ/俺/さ/よ) → reply in タメ口, zero です/ます
-- No Romaji. No Chinese Hanzi. Use Katakana for loanwords. You may use English letters ONLY for established acronyms (e.g. EV, OK, IT).
+            if register == "CASUAL":
+                system_prompt += """REGISTER IS CASUAL (タメ口):
+You MUST reply in タメ口. This means:
+- FORBIDDEN words/endings: です, ます, ください, でしょうか, ございます, ましょう
+- USE: plain verbs (ある, いる, する, 行く, 思う), だ/だよ/だね/よ/ね/かな/じゃん
+- 聞いて NOT 聞いてください, いい NOT いいです, ある NOT あります, だよ NOT ですよ
+- Example reply style: もちろん！何でも聞いてよ。 / いいじゃん！どんな犬が好き？
 
-EXAMPLES:
-User: 相談があるんですが、いいでしょうか？ → もちろんです！どのようなご相談ですか？
-User: 相談があるんだけど、いいかな？ → もちろん！何でも聞いてね。"""
+No Romaji. No Chinese Hanzi. Japanese Kanji only (聞く not 听). Katakana for loanwords."""
+            else:
+                system_prompt += """REGISTER IS FORMAL (丁寧語):
+Reply using です/ます form. Be polite but natural, not overly stiff.
+No Romaji. No Chinese Hanzi. Japanese Kanji only (聞く not 听). Katakana for loanwords."""
+        elif target_language == "Korean":
+            if register == "CASUAL":
+                system_prompt += """REGISTER IS CASUAL (반말):
+You MUST reply in 반말. This means:
+- FORBIDDEN endings: 요, 세요, 습니다, ㅂ니다, 드릴까요, 하시
+- USE: 해/해?/어/아/야/지/는데/거든/잖아
+- 도와드릴까요 is WRONG, use 도와줄까 or 뭐 하고 있어
+- Example reply style: 안녕! 뭐 하고 있어? / 별거 없어~ 너는?
+
+Write in Hangul ONLY. ABSOLUTELY NO English words."""
+            else:
+                system_prompt += """REGISTER IS FORMAL (존댓말):
+Reply using 해요체 (요 endings). Be polite but warm.
+Write in Hangul ONLY. ABSOLUTELY NO English words."""
+        elif target_language == "Chinese":
+            system_prompt += """CHINESE RULES:
+- Write in Simplified Chinese characters ONLY. No Pinyin. No English. No Japanese characters."""
+            if register == "CASUAL":
+                system_prompt += "\n- Use 你 (casual). Do NOT use 您."
+            else:
+                system_prompt += "\n- Use 您 (polite)."
         else:
-            system_prompt += f"Mirror {target_language} formality conventions strictly."
+            system_prompt += f"""\n{target_language} FORMALITY:
+- Write only in {target_language} native script. No English. No transliterations."""
+            if register == "CASUAL":
+                system_prompt += "\n- Use casual/informal register."
+            else:
+                system_prompt += "\n- Use polite/formal register."
 
         diff_rules = config.DIFFICULTY_PROMPT_MODIFIERS.get(difficulty, config.DIFFICULTY_PROMPT_MODIFIERS["Intermediate"])
         system_prompt += f"\n\n[DIFFICULTY: {difficulty}]\n{diff_rules}"
+
+        if user_name:
+            system_prompt += f"\n\n[USER INFO]\nThe user's name is: {user_name}\nYou MUST write this name ENTIRELY in the native script of {target_language}. NEVER mix scripts.\n- Japanese: Use katakana (e.g. ハルト)\n- Korean: Use hangul (e.g. 하루토)\n- Chinese: Use Chinese characters for the phonetic approximation (e.g. 哈鲁托). NEVER use Japanese katakana/hiragana.\n- European languages: Transliterate to Latin alphabet (e.g. Haruto)\nUse the name naturally but sparingly. Do NOT ask the user what their name is."
 
         if self.conversation_memory:
             system_prompt += f"\n\n[PREVIOUS CONTEXT SUMMARY]\n{self.conversation_memory}\n"
@@ -146,7 +238,7 @@ User: 相談があるんだけど、いいかな？ → もちろん！何でも
 
         messages = [{"role": "system", "content": system_prompt}]
         messages.extend(self.conversation_history)
-        messages.append({"role": "user", "content": user_text})
+        messages.append({"role": "user", "content": f"[REGISTER: {register}] {user_text}"})
 
         full = ""
         async for delta, sentence, full_reply, ok, done, extras in self._stream_sentences(messages):
@@ -169,7 +261,7 @@ User: 相談があるんだけど、いいかな？ → もちろん！何でも
     def start_scenario(self, intro_text):
         self.scenario_history = [{"role": "assistant", "content": intro_text}]
 
-    async def get_scenario_reply_stream(self, user_text, target_language, difficulty, scenario_dict, enable_grammar=True, enable_word_bank=True):
+    async def get_scenario_reply_stream(self, user_text, target_language, difficulty, scenario_dict, enable_grammar=True, enable_word_bank=True, user_name=None):
         self.scenario_history.append({"role": "user", "content": user_text})
 
         handholding = (
@@ -182,10 +274,17 @@ User: 相談があるんだけど、いいかな？ → もちろん！何でも
 User is: {scenario_dict['user_role']}. Goal: {scenario_dict['goal']}
 
 RULES:
-1. Stay in character. 
-2. ABSOLUTE LANGUAGE RULE: Speak 100% ONLY in {target_language}. DO NOT use Romaji for {target_language} words. Use Katakana for foreign loanwords. You may use English letters ONLY for established acronyms (e.g. EV, OK, IT). No Chinese Hanzi either.
-3. Max 30 words. {handholding}
-4. If user FULLY achieves their goal, append "[GOAL_REACHED]" to your response. Only if goal is conclusively met.
+1. Stay in character.
+2. FORMALITY: Default to polite register. If the user speaks casually (e.g. plain-form verbs, no です/ます, 반말, etc.), match their casual tone immediately.
+3. ABSOLUTE LANGUAGE RULE: Speak 100% ONLY in {target_language}. NO Romaji. NO Pinyin. NO English (except acronyms like OK). Write ONLY in the native script of {target_language}. For Japanese: no Chinese Hanzi—use only Japanese Kanji.
+4. Max 30 words. {handholding}
+5. If user FULLY achieves their goal, append "[GOAL_REACHED]" to your response. Only if goal is conclusively met.
+6. Do NOT ask the user for their name."""
+
+        if user_name:
+            system_prompt += f"\n\n[USER INFO]\nThe user's name is: {user_name}\nWrite this name ENTIRELY in {target_language} native script. NEVER mix scripts (e.g. for Chinese use 哈鲁托, NOT ハルト). Do NOT ask the user what their name is."
+
+        system_prompt += """
 
 CRITICAL OUTPUT FORMATTING:
 Output ONLY your conversational reply, without any prefixes, tags, or markdown blocks."""
@@ -219,17 +318,39 @@ Output ONLY your conversational reply, without any prefixes, tags, or markdown b
         if cache_key in self.grammar_cache:
             return self.grammar_cache[cache_key]
 
+        lang_script_rule = ""
+        if target_language == "Japanese":
+            lang_script_rule = "Use ONLY Japanese Kanji/Kana. NEVER use Chinese Hanzi (e.g. 听 is WRONG, 聞く is correct). No Romaji."
+        elif target_language == "Chinese":
+            lang_script_rule = "Use ONLY Simplified Chinese characters. No Pinyin."
+        elif target_language == "Korean":
+            lang_script_rule = "Use ONLY Hangul. No romanization."
+        else:
+            lang_script_rule = f"Use only native {target_language} script."
+
         system_prompt = f"""Strict grammar analyzer for {target_language}. Non-conversational.
 
 RULES:
-1. You are checking for hard grammar errors only.
-2. If the sentence is grammatically valid and understandable—even if casual, colloquial, or simple—reply EXACTLY with the word "PERFECT". Do NOT correct for formality or style.
-3. If there are real errors, give the correction + brief English explanation. No filler.
-4. No Romaji/Pinyin. Native script only.
+1. You are checking for HARD STRUCTURAL GRAMMAR ERRORS ONLY.
+2. DO NOT correct any of the following—these are NOT errors:
+   - Casual/informal speech (e.g. タメ口, plain form, slang)
+   - Formality level choices (casual vs polite is the user's choice)
+   - Simple greetings or exclamations (こんにちは, 안녕, 你好, etc.)
+   - Sentence fragments that are natural in conversation
+   - Style preferences
+3. If the sentence is grammatically valid and understandable—even if casual, colloquial, fragmented, or simple—reply EXACTLY with the word "PERFECT".
+4. If there IS a real structural error (wrong particle, incorrect conjugation, impossible word order), give the correction + brief English explanation.
+5. {lang_script_rule}
+6. Write explanations in English. Use {target_language} script for {target_language} words only.
 
-User: "おすすめの勉強方法とかある？" → PERFECT
+EXAMPLES:
 User: "こんにちは" → PERFECT
-User: "何は手伝いですますか" → Correction: 何か手伝いましょうか / "何は"+"手伝いですますか" is incorrect. Use "何か手伝いましょうか"."""
+User: "聞きたい事があるんだけどいいかな" → PERFECT
+User: "タメ口でいいよ" → PERFECT
+User: "おすすめの勉強方法とかある？" → PERFECT
+User: "何は手伝いですますか" → Correction: 何か手伝いましょうか / Wrong particle: は should be か. Incorrect verb form: ですます is not valid. Use ましょうか.
+User: "你好" → PERFECT
+User: "안녕하세요" → PERFECT"""
         try:
             reply = await self._complete(
                 [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_text}],
@@ -322,13 +443,25 @@ Mix nouns, verbs, particles, and punctuation. Do NOT use Romaji/Pinyin. Output O
         if cache_key in self.word_bank_cache:
             return self.word_bank_cache[cache_key], True
 
+        lang_script_rule = ""
+        if target_language == "Japanese":
+            lang_script_rule = "Use ONLY Japanese Kanji/Kana for Japanese words. NEVER use Chinese Hanzi (e.g. 听 is WRONG, use 聞く). No Romaji."
+        elif target_language == "Chinese":
+            lang_script_rule = "Use ONLY Simplified Chinese characters for Chinese words. No Pinyin."
+        elif target_language == "Korean":
+            lang_script_rule = "Use ONLY Hangul for Korean words. No romanization."
+        else:
+            lang_script_rule = f"Use only native {target_language} script for {target_language} words."
+
         sp = f"""You are a strict {target_language} grammar checker.
 Analyze the following sentence from a language learner: "{user_text}"
+
+IMPORTANT: Casual/informal speech is NOT a grammar error. Greetings, exclamations, and sentence fragments that are natural in conversation are CORRECT. Only flag real structural grammar errors (wrong particles, incorrect conjugation, impossible word order).
 
 You MUST respond in this exact format:
 Grammar Correct: [YES or NO]
 Correction: [The corrected sentence, if NO. If YES, leave blank]
-Explanation: [Write your explanation ENTIRELY IN ENGLISH. You are strictly forbidden from using Romaji (e.g. do NOT write "arimasu" or "ga"). Use Kana/Kanji for {target_language} words, but all other words MUST be English.]"""
+Explanation: [Write your explanation ENTIRELY IN ENGLISH. {lang_script_rule} All other words MUST be English. No Romaji. No Pinyin.]"""
         try:
             raw = await self._complete(
                 messages=[
@@ -365,13 +498,24 @@ Explanation: [Write your explanation ENTIRELY IN ENGLISH. You are strictly forbi
     # ---------- Grammar Tutor Chat ----------
 
     async def chat_with_grammar_tutor(self, user_question, original_text, grammar_correction, history, target_language):
+        lang_script_rule = ""
+        if target_language == "Japanese":
+            lang_script_rule = "Use ONLY Japanese Kanji/Kana for Japanese words. NEVER use Chinese Hanzi (e.g. 听 is WRONG, use 聞く). No Romaji."
+        elif target_language == "Chinese":
+            lang_script_rule = "Use ONLY Simplified Chinese characters for Chinese words. No Pinyin."
+        elif target_language == "Korean":
+            lang_script_rule = "Use ONLY Hangul for Korean words. No romanization."
+        else:
+            lang_script_rule = f"Use only native {target_language} script for {target_language} words."
+
         sp = f"""Grammar tutor for {target_language}. Student said: "{original_text}". Correction: "{grammar_correction}"
 Answer questions about this correction. Brief, encouraging, easy to understand.
 
 RULES:
-1. Explain in English only. No Chinese or other languages.
-2. No Romaji/Pinyin. BAD: "やあ (ya-ah)" GOOD: "やあ"
-3. Be concise. Say each point once.
+1. Explain ENTIRELY in English. The ONLY non-English text allowed is {target_language} words written in their native script.
+2. {lang_script_rule}
+3. No Romaji. No Pinyin. No romanization of any kind. BAD: "やあ (ya-ah)" GOOD: "やあ"
+4. Be concise. Say each point once.
 """
         messages = [{"role": "system", "content": sp}]
         for msg in history:

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronDown, Settings, BarChart2, LogOut, Trash2 } from 'lucide-react';
+import { ChevronDown, Settings, BarChart2, LogOut, Trash2, User } from 'lucide-react';
 
 export const parseDefinition = (text) => {
   if (!text) return { definition: "", reading: null };
@@ -40,11 +40,11 @@ export default function Sidebar({
       {/* User Profile */}
       <div className="p-6 border-b border-slate-800 shrink-0 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-500 flex items-center justify-center font-bold text-white shadow-lg shrink-0">
-            {user.username.charAt(0).toUpperCase()}
+          <div className={`w-10 h-10 rounded-full bg-gradient-to-tr ${user.gradientClass || 'from-blue-500 to-indigo-500'} flex items-center justify-center text-white shadow-lg shrink-0 overflow-hidden`}>
+            <User className="w-6 h-6 mt-1.5 opacity-90" />
           </div>
           <div className="min-w-0">
-            <h2 className="font-semibold truncate">{user.username}</h2>
+            <h2 className="font-semibold truncate">{user.nickname || user.username}</h2>
             <p className="text-[10px] text-slate-400">Polyglot Student</p>
           </div>
         </div>

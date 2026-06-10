@@ -30,6 +30,17 @@ export default function Auth({ onLogin }) {
         throw new Error(data.detail || 'Authentication failed');
       }
 
+      const gradients = [
+        "from-blue-500 to-indigo-500",
+        "from-purple-500 to-pink-500",
+        "from-emerald-400 to-cyan-500",
+        "from-orange-400 to-rose-500",
+        "from-teal-400 to-blue-500",
+        "from-rose-400 to-orange-500",
+        "from-cyan-500 to-blue-500"
+      ];
+      data.gradientClass = gradients[Math.floor(Math.random() * gradients.length)];
+
       onLogin(data);
     } catch (err) {
       setError(err.message);

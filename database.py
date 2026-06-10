@@ -22,11 +22,13 @@ class User(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
+    nickname = Column(String(50), nullable=True)
     password_hash = Column(String(255), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     avg_chars_per_second = Column(Float, default=5.0)
     total_chars_spoken = Column(Integer, default=0)
     total_seconds_spoken = Column(Float, default=0.0)
+    avatar = Column(Text, nullable=True)
     
     messages = relationship("Message", back_populates="user", cascade="all, delete-orphan")
     vocabularies = relationship("Vocabulary", back_populates="user", cascade="all, delete-orphan")
@@ -80,6 +82,18 @@ class Analytic(Base):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN avatar TEXT;"))
+    except Exception:
+        pass
+        
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN nickname VARCHAR(50);"))
+    except Exception:
+        pass
 
 def get_db():
     db = SessionLocal()

@@ -1,8 +1,9 @@
 import React, { memo } from 'react';
 import { motion } from 'framer-motion';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, User } from 'lucide-react';
 
 const MessageList = memo(function MessageList({
+  user,
   messages,
   language,
   readingMode,
@@ -13,29 +14,38 @@ const MessageList = memo(function MessageList({
 }) {
   const handleMouseUp = (e) => {
     const selection = window.getSelection().toString().trim();
-    if (selection && selection.length > 0 && selection.length < 200) {
-      const x = Math.min(e.clientX, window.innerWidth - 220);
-      const y = Math.max(e.clientY - 50, 10);
-      setSelectionToolbar({ word: selection, x, y });
-      setDefinitionPopup(null);
+    if (selection) {
+      setSelectionToolbar({
+        text: selection,
+        x: e.clientX,
+        y: e.clientY - 40
+      });
     } else {
       setSelectionToolbar(null);
     }
   };
 
-  const handleClick = () => {
+  const handleClick = (e) => {
     if (!window.getSelection().toString().trim()) {
       setSelectionToolbar(null);
-      setDefinitionPopup(null);
     }
   };
 
   const renderMessage = (m, keyStr) => {
+    if (m.role === 'system') {
+      return (
+        <div key={`system-${keyStr}`} className="flex justify-center my-3">
+          <div className="bg-slate-800/60 border border-slate-700/50 text-slate-400 text-xs font-medium px-4 py-1.5 rounded-full">
+            {m.content}
+          </div>
+        </div>
+      );
+    }
     if (m.type === 'scenario') {
       if (m.status === 'active') {
         return (
-          <div key={`scenario-${keyStr}`} className="flex flex-col space-y-6 my-4">
-            <div className="bg-blue-500/10 border border-blue-500/20 text-blue-300 p-5 rounded-2xl flex flex-col gap-3 shadow-lg shadow-blue-500/5">
+          <div key={`scenario-${keyStr}`} className="flex flex-col space-y-4 my-2">
+            <div className="bg-blue-500/10 border border-blue-500/20 text-blue-300 p-4 rounded-2xl flex flex-col gap-3 shadow-lg shadow-blue-500/5">
               <div className="font-bold uppercase tracking-wider text-xs flex items-center gap-3">
                 <span className="relative flex h-2.5 w-2.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
@@ -60,7 +70,7 @@ const MessageList = memo(function MessageList({
               </span>
               <span className="text-xs font-semibold text-slate-500 bg-slate-800/80 px-2 py-1.5 rounded-lg border border-slate-700">{m.messages.length} messages</span>
             </summary>
-            <div className="p-6 space-y-6 bg-slate-900/60 border-t border-slate-700/50">
+            <div className="p-4 space-y-2 bg-slate-900/60 border-t border-slate-700/50">
                {m.messages.map((sMsg, j) => renderMessage(sMsg, `${keyStr}-${j}`))}
             </div>
           </details>
@@ -71,29 +81,43 @@ const MessageList = memo(function MessageList({
     return (
       <motion.div 
         key={keyStr}
-        initial={{ opacity: 0, y: 10, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex gap-3 w-full group hover:bg-slate-800/30 py-2 px-3 rounded-2xl transition-colors"
       >
-        <div className={`relative max-w-[75%] p-4 rounded-2xl ${
-          m.role === 'user' 
-            ? 'bg-blue-600 text-white rounded-tr-none shadow-blue-500/20' 
-            : 'bg-slate-800 text-slate-100 rounded-tl-none border border-slate-700/50 shadow-xl'
-        } shadow-lg text-[15px] leading-relaxed`}>
-          {m.role === 'user' && ((m.grammar && m.grammar.replace(/[^a-zA-Z]/g, '').toUpperCase() !== 'PERFECT') || m.pronunciation) && (
-            <button 
-              onClick={() => setInlineFeedbackPopup(m)}
-              className="absolute -left-12 top-2 p-2 bg-slate-800 text-amber-400 rounded-full shadow-lg border border-slate-700 hover:bg-slate-700 hover:text-amber-300 transition-colors z-10"
-              title="View Feedback"
-            >
-              <AlertTriangle size={18} />
-            </button>
-          )}
-          {m.role === 'ai' && (m.content.includes('<ruby>') || (language === 'Japanese' && readingMode === 'ふりがな')) ? (
-             <div dangerouslySetInnerHTML={{ __html: m.content }} />
+        <div className="shrink-0 mt-1">
+          {m.role === 'user' ? (
+            <div className={`w-8 h-8 rounded-full bg-gradient-to-tr ${user?.gradientClass || 'from-blue-500 to-indigo-500'} flex items-center justify-center text-white shadow-lg shadow-blue-500/20 shrink-0 overflow-hidden`}>
+              <User className="w-5 h-5 mt-1 opacity-90" />
+            </div>
           ) : (
-             m.content
+            <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 shrink-0 overflow-hidden">
+              <User className="w-5 h-5 mt-1 opacity-80" />
+            </div>
           )}
+        </div>
+        
+        <div className="flex-1 relative space-y-1">
+          <div className="flex items-center gap-3">
+             <span className="font-semibold text-slate-200 text-sm">{m.role === 'user' ? (user?.nickname || user?.username || 'You') : 'Polyglot AI'}</span>
+             {m.role === 'user' && ((m.grammar && m.grammar.replace(/[^a-zA-Z]/g, '').toUpperCase() !== 'PERFECT') || m.pronunciation) && (
+               <button 
+                 onClick={() => setInlineFeedbackPopup(m)}
+                 className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/10 text-amber-400 rounded-full border border-amber-500/20 hover:bg-amber-500/20 transition-colors text-[10px] font-bold tracking-wide uppercase shadow-sm"
+                 title="View Feedback"
+               >
+                 <AlertTriangle size={12} /> Feedback
+               </button>
+             )}
+          </div>
+          
+          <div className="text-[17px] leading-relaxed text-slate-300 font-medium">
+            {m.role === 'ai' && (m.content.includes('<ruby>') || (language === 'Japanese' && readingMode === 'ふりがな') || (language === 'Chinese' && readingMode === '拼音')) ? (
+               <div dangerouslySetInnerHTML={{ __html: m.content }} />
+            ) : (
+               m.content
+            )}
+          </div>
         </div>
       </motion.div>
     );
@@ -101,7 +125,7 @@ const MessageList = memo(function MessageList({
 
   return (
     <div 
-      className="flex-1 overflow-y-auto p-6 space-y-6"
+      className="flex-1 overflow-y-auto px-2 py-4 space-y-0"
       onMouseUp={handleMouseUp}
       onClick={handleClick}
     >

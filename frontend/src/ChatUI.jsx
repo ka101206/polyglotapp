@@ -9,8 +9,8 @@ import Sidebar from './components/Sidebar';
 import SettingsModal from './components/SettingsModal';
 import { SelectionToolbar, DefinitionPopup, InlineFeedbackPopup } from './components/Popups';
 
-export default function ChatUI({ user, onLogout }) {
-  const [language, setLanguage] = useState(() => localStorage.getItem('polyglot_language') || 'Japanese');
+export default function ChatUI({ user, initialLanguage, onLogout, setUser }) {
+  const [language, setLanguage] = useState(() => initialLanguage || localStorage.getItem('polyglot_language') || 'Japanese');
   const [difficulty, setDifficulty] = useState(() => {
     const savedLang = localStorage.getItem('polyglot_language') || 'Japanese';
     return localStorage.getItem(`polyglot_difficulty_${savedLang}`) || 'Intermediate';
@@ -135,6 +135,7 @@ export default function ChatUI({ user, onLogout }) {
 
   const {
     messages,
+    setMessages,
     isThinking,
     isAiSpeaking,
     tutorChatHistory,
@@ -148,6 +149,14 @@ export default function ChatUI({ user, onLogout }) {
     setWordBankPool(words);
     setAssembledWords([]);
   });
+
+  const prevLangRef = useRef(language);
+  useEffect(() => {
+    if (prevLangRef.current !== language) {
+      setMessages(prev => [...prev, { role: 'system', content: `Language switched to ${language}` }]);
+      prevLangRef.current = language;
+    }
+  }, [language]);
 
   const { isRecording, toggleRecording } = useMicrophone((text, duration) => {
     sendMessage(text, duration);
@@ -203,6 +212,7 @@ export default function ChatUI({ user, onLogout }) {
           <div className="h-2 bg-slate-900 border-b border-slate-800 shrink-0 z-10 w-full" />
           
           <MessageList 
+            user={user}
             messages={messages}
             language={language}
             readingMode={readingMode}
@@ -277,6 +287,7 @@ export default function ChatUI({ user, onLogout }) {
 
         <SettingsModal 
           user={user}
+          setUser={setUser}
           onLogout={onLogout}
           showSettings={showSettings}
           setShowSettings={setShowSettings}

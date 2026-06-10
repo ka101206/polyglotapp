@@ -16,6 +16,7 @@ fastapi>=0.109.0
 uvicorn>=0.27.0
 python-multipart>=0.0.9
 websockets>=12.0
+pypinyin>=0.50.0
 
 # Japanese TTS dependencies
 pyopenjtalk>=0.3.0

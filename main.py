@@ -52,6 +52,13 @@ class AuthResponse(BaseModel):
     user_id: int
     username: str
     message: str
+    avatar: str | None = None
+    nickname: str | None = None
+
+class UserUpdateRequest(BaseModel):
+    username: str | None = None
+    avatar: str | None = None
+    nickname: str | None = None
 
 @app.post("/auth/register", response_model=AuthResponse)
 def register(req: AuthRequest, db: Session = Depends(get_db)):
@@ -62,14 +69,34 @@ def register(req: AuthRequest, db: Session = Depends(get_db)):
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    return {"user_id": new_user.id, "username": new_user.username, "message": "Registered successfully"}
+    return {"user_id": new_user.id, "username": new_user.username, "message": "Registered successfully", "avatar": new_user.avatar, "nickname": new_user.nickname}
 
 @app.post("/auth/login", response_model=AuthResponse)
 def login(req: AuthRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == req.username).first()
     if not user or not bcrypt.checkpw(req.password.encode(), user.password_hash.encode()):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    return {"user_id": user.id, "username": user.username, "message": "Logged in successfully"}
+    return {"user_id": user.id, "username": user.username, "message": "Logged in successfully", "avatar": user.avatar, "nickname": user.nickname}
+
+@app.put("/api/users/{user_id}", response_model=AuthResponse)
+def update_user(user_id: int, req: UserUpdateRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Not found")
+        
+    if req.username and req.username != user.username:
+        if db.query(User).filter(User.username == req.username).first():
+            raise HTTPException(status_code=400, detail="Username already exists")
+        user.username = req.username
+        
+    if req.avatar is not None:
+        user.avatar = req.avatar
+        
+    if req.nickname is not None:
+        user.nickname = req.nickname
+        
+    db.commit()
+    return {"user_id": user.id, "username": user.username, "message": "Updated successfully", "avatar": user.avatar, "nickname": user.nickname}
 
 # ---------- Analytics ----------
 
@@ -96,19 +123,34 @@ def dedup_repeated_phrases(text: str) -> str:
     return text
 
 def apply_reading_mode(text: str, language: str, reading_mode: str) -> str:
-    if language != "Japanese" or reading_mode not in ("ふりがな", "かなのみ"):
-        return text
-    result = _kakasi.convert(text)
-    if reading_mode == "ふりがな":
-        return "".join(
-            f"<ruby>{item['orig']}<rt>{item['hira']}</rt></ruby>" if item['orig'] != item['hira'] else item['orig']
-            for item in result
-        )
-    else:  # かなのみ
-        return "".join(item['hira'] for item in result)
+    if language == "Japanese" and reading_mode in ("ふりがな", "かなのみ"):
+        result = _kakasi.convert(text)
+        if reading_mode == "ふりがな":
+            return "".join(
+                f"<ruby>{item['orig']}<rt>{item['hira']}</rt></ruby>" if item['orig'] != item['hira'] else item['orig']
+                for item in result
+            )
+        else:  # かなのみ
+            return "".join(item['hira'] for item in result)
+    elif language == "Chinese" and reading_mode == "拼音":
+        try:
+            from pypinyin import pinyin, Style
+            chars = list(text)
+            py = pinyin(text, style=Style.TONE)
+            out = []
+            for ch, p in zip(chars, py):
+                tone = p[0]
+                if ch != tone and '\u4e00' <= ch <= '\u9fff':
+                    out.append(f"<ruby>{ch}<rt>{tone}</rt></ruby>")
+                else:
+                    out.append(ch)
+            return "".join(out)
+        except ImportError:
+            return text
+    return text
 
 def needs_furigana(reading_mode: str) -> bool:
-    return reading_mode in ("ふりがな", "かなのみ")
+    return reading_mode in ("ふりがな", "かなのみ", "拼音")
 
 # ---------- WebSocket ----------
 
@@ -118,6 +160,8 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
     db = next(get_db())
     analytics_manager = AnalyticsManager(db, user_id)
     scenario_grammar_errors = []
+    # Per-connection AI client to isolate user state (history, nickname, register)
+    ai_client = AIClient()
 
     async def send_audio(text, speed, language):
         """Generate and send audio for a single sentence."""
@@ -233,11 +277,15 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
                 analytics_manager.add_speaking_time(len(user_text) / avg)
 
             # Pick the right generator
+            user_name = None
+            if db_user:
+                user_name = db_user.nickname or db_user.username
+                
             if scenario:
                 scenario_dict = config.SCENARIOS.get(scenario)
-                generator = ai_client.get_scenario_reply_stream(user_text, language, difficulty, scenario_dict, enable_grammar, enable_word_bank)
+                generator = ai_client.get_scenario_reply_stream(user_text, language, difficulty, scenario_dict, enable_grammar, enable_word_bank, user_name=user_name)
             else:
-                generator = ai_client.get_reply_stream(user_text, language, difficulty, enable_grammar, enable_word_bank)
+                generator = ai_client.get_reply_stream(user_text, language, difficulty, enable_grammar, enable_word_bank, user_name=user_name)
 
             # --- Stream LLM → UI + Audio ---
             use_furigana = needs_furigana(reading_mode)
