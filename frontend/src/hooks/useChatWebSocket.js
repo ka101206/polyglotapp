@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-export default function useChatWebSocket(user_id, language, difficulty, readingMode, ttsSpeed, enableGrammar, enableWordBank, onWordBankReceived) {
+export default function useChatWebSocket(user_id, language, difficulty, readingMode, ttsSpeed, enableGrammar, enableWordBank, voiceGender, onWordBankReceived) {
   const [messages, setMessages] = useState([]);
   const [isThinking, setIsThinking] = useState(false);
   const [isAiSpeaking, setIsAiSpeaking] = useState(false);
@@ -207,16 +207,17 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
       reading_mode: readingMode,
       speed: ttsSpeed,
       enable_grammar: enableGrammar,
-      enable_word_bank: enableWordBank
+      enable_word_bank: enableWordBank,
+      gender: voiceGender
     }));
 
     setIsThinking(true);
     if (onWordBankRef.current) onWordBankRef.current([]);
-  }, [language, difficulty, readingMode, ttsSpeed, enableGrammar, enableWordBank]);
+  }, [language, difficulty, readingMode, ttsSpeed, enableGrammar, enableWordBank, voiceGender]);
 
   const replayText = useCallback((text, speed) => {
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-      ws.current.send(JSON.stringify({ type: 'repeat', text, language, speed }));
+      ws.current.send(JSON.stringify({ type: 'repeat', text, language, speed, gender: voiceGender }));
     }
   }, [language]);
 
@@ -247,13 +248,14 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
             reading_mode: readingMode,
             speed: ttsSpeed,
             enable_grammar: enableGrammar,
-            enable_word_bank: enableWordBank
+            enable_word_bank: enableWordBank,
+            gender: voiceGender
         }));
     }
     
     // Clear any previous word bank pool
     if (onWordBankRef.current) onWordBankRef.current([]);
-  }, [language, difficulty, readingMode, ttsSpeed, enableGrammar, enableWordBank]);
+  }, [language, difficulty, readingMode, ttsSpeed, enableGrammar, enableWordBank, voiceGender]);
 
   return {
     messages,

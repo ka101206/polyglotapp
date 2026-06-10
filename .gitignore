@@ -12,3 +12,4 @@ models/
 asset/
 *.safetensors
 _deprecated/
+model_assets/

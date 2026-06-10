@@ -24,6 +24,7 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser }) {
   const [silenceTimeout, setSilenceTimeout] = useState(2.5);
   const [enableGrammar, setEnableGrammar] = useState(() => localStorage.getItem('polyglot_enable_grammar') !== 'false');
   const [enableWordBank, setEnableWordBank] = useState(() => localStorage.getItem('polyglot_enable_word_bank') !== 'false');
+  const [voiceGender, setVoiceGender] = useState(() => localStorage.getItem('polyglot_voice_gender') || 'female');
   const [showSettings, setShowSettings] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -145,7 +146,7 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser }) {
     replayText,
     sendTutorMessage,
     triggerScenario
-  } = useChatWebSocket(user.user_id, language, difficulty, readingMode, ttsSpeed, enableGrammar, enableWordBank, (words) => {
+  } = useChatWebSocket(user.user_id, language, difficulty, readingMode, ttsSpeed, enableGrammar, enableWordBank, voiceGender, (words) => {
     setWordBankPool(words);
     setAssembledWords([]);
   });
@@ -310,6 +311,11 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser }) {
           setEnableWordBank={(val) => {
             setEnableWordBank(val);
             localStorage.setItem('polyglot_enable_word_bank', val);
+          }}
+          voiceGender={voiceGender}
+          setVoiceGender={(val) => {
+            setVoiceGender(val);
+            localStorage.setItem('polyglot_voice_gender', val);
           }}
         />
 

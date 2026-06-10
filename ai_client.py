@@ -229,7 +229,7 @@ Write in Hangul ONLY. ABSOLUTELY NO English words."""
         system_prompt += f"\n\n[DIFFICULTY: {difficulty}]\n{diff_rules}"
 
         if user_name:
-            system_prompt += f"\n\n[USER INFO]\nThe user's name is: {user_name}\nUse this name EXACTLY as written. Do NOT modify, transliterate, or re-spell it. If it is already in the target language's script, use it as-is. Only adapt the script if the name is in a completely different writing system (e.g. if the name is in katakana but you are speaking Korean, write it in hangul). Use the name naturally but sparingly. Do NOT ask the user what their name is."
+            system_prompt += f"\n\n[USER INFO]\nThe user's name is: {user_name}\nCRITICAL: Output this name EXACTLY as written above — same characters, same script, no changes. Do NOT romanize it, do NOT transliterate it, do NOT convert it to another writing system, do NOT re-spell it. Write \"{user_name}\" verbatim every time you address the user. Use the name naturally but sparingly. Do NOT ask the user what their name is."
 
         if self.conversation_memory:
             system_prompt += f"\n\n[PREVIOUS CONTEXT SUMMARY]\n{self.conversation_memory}\n"
@@ -282,7 +282,7 @@ RULES:
 6. Do NOT ask the user for their name."""
 
         if user_name:
-            system_prompt += f"\n\n[USER INFO]\nThe user's name is: {user_name}\nUse this name EXACTLY as written. Do NOT modify or re-spell it. Only adapt the script if it's in a completely different writing system. Do NOT ask the user what their name is."
+            system_prompt += f"\n\n[USER INFO]\nThe user's name is: {user_name}\nCRITICAL: Output this name EXACTLY as written above — same characters, same script, no changes. Do NOT romanize it, do NOT transliterate it, do NOT convert it to another writing system, do NOT re-spell it. Write \"{user_name}\" verbatim every time you address the user. Do NOT ask the user what their name is."
 
         system_prompt += """
 

@@ -163,9 +163,9 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
     # Per-connection AI client to isolate user state (history, nickname, register)
     ai_client = AIClient()
 
-    async def send_audio(text, speed, language):
+    async def send_audio(text, speed, language, gender="female"):
         """Generate and send audio for a single sentence."""
-        async for audio_bytes in tts_engine.generate_audio_stream(text, speed=speed, language=language):
+        async for audio_bytes in tts_engine.generate_audio_stream(text, speed=speed, language=language, gender=gender):
             encoded = base64.b64encode(audio_bytes).decode()
             await websocket.send_json({"type": "audio", "data": encoded})
 
@@ -216,7 +216,8 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
                 text_to_repeat = payload.get("text", "")
                 req_lang = payload.get("language", "Japanese")
                 req_speed = float(payload.get("speed", 0.8))
-                await send_audio(text_to_repeat, req_speed, req_lang)
+                req_gender = payload.get("gender", "female")
+                await send_audio(text_to_repeat, req_speed, req_lang, req_gender)
                 await websocket.send_json({"type": "audio_done"})
                 continue
 
@@ -242,7 +243,8 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
                 await websocket.send_json({"type": "text", "content": display, "raw_content": reply})
 
                 req_speed = float(payload.get("speed", 1.0))
-                await send_audio(reply, req_speed, language)
+                req_gender = payload.get("gender", "female")
+                await send_audio(reply, req_speed, language, req_gender)
                 await websocket.send_json({"type": "audio_done"})
                 
                 enable_word_bank = payload.get("enable_word_bank", True)
@@ -259,6 +261,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
             req_speed = float(payload.get("speed", 1.0))
             enable_grammar = payload.get("enable_grammar", True)
             enable_word_bank = payload.get("enable_word_bank", True)
+            req_gender = payload.get("gender", "female")
             print(f"[DEBUG] Chat payload received: enable_grammar={enable_grammar}")
 
             # Track speaking analytics
@@ -299,7 +302,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
                     chunk = await audio_queue.get()
                     if chunk is None:
                         break
-                    await send_audio(chunk, req_speed, language)
+                    await send_audio(chunk, req_speed, language, req_gender)
 
             audio_task = asyncio.create_task(_audio_worker())
 

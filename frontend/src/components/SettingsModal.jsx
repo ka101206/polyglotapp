@@ -20,7 +20,9 @@ export default function SettingsModal({
   enableGrammar,
   setEnableGrammar,
   enableWordBank,
-  setEnableWordBank
+  setEnableWordBank,
+  voiceGender,
+  setVoiceGender
 }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [newUsername, setNewUsername] = useState('');
@@ -214,6 +216,34 @@ export default function SettingsModal({
                 <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
               </div>
             </label>
+          </div>
+
+          <div className="pt-4 border-t border-slate-800 space-y-3">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Voice</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setVoiceGender('female')}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  voiceGender === 'female'
+                    ? 'bg-pink-500/20 border border-pink-500 text-pink-300'
+                    : 'bg-slate-900/50 border border-slate-700 text-slate-400 hover:border-slate-500'
+                }`}
+              >
+                Female
+              </button>
+              <button
+                type="button"
+                onClick={() => setVoiceGender('male')}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  voiceGender === 'male'
+                    ? 'bg-blue-500/20 border border-blue-500 text-blue-300'
+                    : 'bg-slate-900/50 border border-slate-700 text-slate-400 hover:border-slate-500'
+                }`}
+              >
+                Male
+              </button>
+            </div>
           </div>
 
           <div className="pt-4 border-t border-slate-800 space-y-4">

@@ -1,5 +1,5 @@
 # Core dependencies for the Polyglot TTS/STT Application
-numpy>=1.22.0
+numpy>=1.22.0,<2
 scipy>=1.10.0
 soundfile>=0.12.0
 SpeechRecognition>=3.10.0
@@ -27,3 +27,7 @@ fugashi>=1.1.0
 jaconv>=0.3.0
 mojimoji>=0.0.13
 Janome>=0.5.0
+
+# New TTS engines
+style-bert-vits2>=2.5.0
+huggingface-hub>=0.20.0
