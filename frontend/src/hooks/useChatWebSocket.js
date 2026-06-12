@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-export default function useChatWebSocket(user_id, language, difficulty, readingMode, ttsSpeed, enableGrammar, enableWordBank, voiceGender, onWordBankReceived) {
+export default function useChatWebSocket(user_id, language, difficulty, readingMode, ttsSpeed, enableGrammar, enableWordBank, voiceGender, tokenMode, onWordBankReceived) {
   const [messages, setMessages] = useState([]);
   const [isThinking, setIsThinking] = useState(false);
   const [isAiSpeaking, setIsAiSpeaking] = useState(false);
@@ -250,12 +250,13 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
       speed: ttsSpeed,
       enable_grammar: enableGrammar,
       enable_word_bank: enableWordBank,
-      gender: voiceGender
+      gender: voiceGender,
+      token_mode: tokenMode
     }));
 
     setIsThinking(true);
     if (onWordBankRef.current) onWordBankRef.current([]);
-  }, [language, difficulty, readingMode, ttsSpeed, enableGrammar, enableWordBank, voiceGender]);
+  }, [language, difficulty, readingMode, ttsSpeed, enableGrammar, enableWordBank, voiceGender, tokenMode]);
 
   const replayText = useCallback((text, speed) => {
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
@@ -278,9 +279,10 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
       grammar_correction: inlineFeedbackPopup?.grammar,
       history: tutorChatHistory,
       language,
-      readingMode
+      readingMode,
+      token_mode: tokenMode
     }));
-  }, [tutorChatHistory, language, readingMode]);
+  }, [tutorChatHistory, language, readingMode, tokenMode]);
 
   const triggerScenario = useCallback((scenarioId) => {
     unlockAudio();
@@ -295,7 +297,8 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
             speed: ttsSpeed,
             enable_grammar: enableGrammar,
             enable_word_bank: enableWordBank,
-            gender: voiceGender
+            gender: voiceGender,
+            token_mode: tokenMode
         }));
     }
     

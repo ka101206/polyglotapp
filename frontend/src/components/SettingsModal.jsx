@@ -23,6 +23,8 @@ export default function SettingsModal({
   setEnableWordBank,
   voiceGender,
   setVoiceGender,
+  tokenMode,
+  setTokenMode,
   showTokens,
   setShowTokens,
   isDarkMode,
@@ -306,6 +308,16 @@ export default function SettingsModal({
               <div className="relative">
                 <input type="checkbox" className="sr-only peer" checked={showTokens} onChange={(e) => setShowTokens(e.target.checked)} />
                 <div className="w-11 h-6 bg-slate-300 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+              </div>
+            </label>
+            <label className="flex items-center justify-between cursor-pointer">
+              <div className="flex flex-col">
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Low Token Usage Mode</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">Sacrifices naturalness and limits context to save tokens</span>
+              </div>
+              <div className="relative ml-4">
+                <input type="checkbox" className="sr-only peer" checked={tokenMode === 'low'} onChange={(e) => setTokenMode(e.target.checked ? 'low' : 'high')} />
+                <div className="w-11 h-6 bg-slate-300 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500"></div>
               </div>
             </label>
           </div>

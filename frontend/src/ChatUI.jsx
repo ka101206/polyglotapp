@@ -25,6 +25,7 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
   const [enableGrammar, setEnableGrammar] = useState(() => localStorage.getItem('polyglot_enable_grammar') !== 'false');
   const [enableWordBank, setEnableWordBank] = useState(() => localStorage.getItem('polyglot_enable_word_bank') !== 'false');
   const [voiceGender, setVoiceGender] = useState(() => localStorage.getItem('polyglot_voice_gender') || 'female');
+  const [tokenMode, setTokenMode] = useState(() => localStorage.getItem('polyglot_token_mode') || 'high');
   const [showTokens, setShowTokens] = useState(() => localStorage.getItem('polyglot_show_tokens') === 'true');
   const [showSettings, setShowSettings] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
@@ -93,7 +94,8 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
       }
     }
     localStorage.setItem('polyglot_language', language);
-  }, [difficulty, language]);
+    localStorage.setItem('polyglot_token_mode', tokenMode);
+  }, [difficulty, language, tokenMode]);
 
   const fetchNotebook = async () => {
     try {
@@ -148,7 +150,7 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
     sendTutorMessage,
     triggerScenario,
     isTTSWarmingUp
-  } = useChatWebSocket(user.user_id, language, difficulty, readingMode, ttsSpeed, enableGrammar, enableWordBank, voiceGender, (words) => {
+  } = useChatWebSocket(user.user_id, language, difficulty, readingMode, ttsSpeed, enableGrammar, enableWordBank, voiceGender, tokenMode, (words) => {
     setWordBankPool(words);
     setAssembledWords([]);
   });
@@ -322,6 +324,11 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
           setEnableWordBank={(val) => {
             setEnableWordBank(val);
             localStorage.setItem('polyglot_enable_word_bank', val);
+          }}
+          tokenMode={tokenMode}
+          setTokenMode={(val) => {
+            setTokenMode(val);
+            localStorage.setItem('polyglot_token_mode', val);
           }}
           voiceGender={voiceGender}
           setVoiceGender={(val) => {

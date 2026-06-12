@@ -183,7 +183,7 @@ class AIClient:
 
     # ---------- Chat ----------
 
-    async def get_reply_stream(self, user_text, target_language, difficulty="Intermediate", enable_grammar=True, enable_word_bank=True, user_name=None, notebook_words=None):
+    async def get_reply_stream(self, user_text, target_language, difficulty="Intermediate", enable_grammar=True, enable_word_bank=True, user_name=None, notebook_words=None, voice_gender="female", token_mode="high"):
         # Detect and track formality register
         # Reset register if language changed
         last_lang = getattr(self, '_last_language', None)
@@ -218,21 +218,34 @@ Rules:
 - Register: {register} ({lang[register]})
 - Script: {lang['script']}"""
 
-        diff_rules = config.DIFFICULTY_PROMPT_MODIFIERS.get(difficulty, config.DIFFICULTY_PROMPT_MODIFIERS["Intermediate"])
-        system_prompt += f"\nDifficulty: {difficulty}. {diff_rules}"
+        if token_mode == "low":
+            system_prompt = f"Role: Native {target_language} speaker.\nRules: <30 words. Register: {register} ({lang[register]}). Script: {lang['script']}."
 
-        if user_name:
-            system_prompt += f"\nThe user's name is \"{user_name}\" — write it exactly as shown when you use it. Only use it rarely (every few messages). Don't ask their name."
+        gender_rules = f"You are a {voice_gender}. Match your speaking style, tone, and self-referential pronouns to your gender ({voice_gender})."
+        if target_language == "Japanese":
+            if voice_gender == "male":
+                gender_rules += " When referring to yourself, use '俺', '僕', or '私' (for formal)."
+            else:
+                gender_rules += " When referring to yourself, use '私', 'うち', 'あたし', or '僕' (for 僕っこ)."
+        
+        system_prompt += f"\n- Persona: {gender_rules}"
 
-        if self.conversation_memory:
-            system_prompt += f"\n\n[Previous context]\n{self.conversation_memory}"
+        if token_mode == "high":
+            diff_rules = config.DIFFICULTY_PROMPT_MODIFIERS.get(difficulty, config.DIFFICULTY_PROMPT_MODIFIERS["Intermediate"])
+            system_prompt += f"\nDifficulty: {difficulty}. {diff_rules}"
 
-        # Anti-circular: when conversation is long enough, nudge towards notebook topics
-        if len(self.conversation_history) >= 8:
-            system_prompt += "\n\nThe conversation may be getting repetitive. If it feels circular (e.g. just agreeing or complimenting back and forth), naturally steer to a new topic."
-            if notebook_words:
-                topics_str = ", ".join(notebook_words[:15])
-                system_prompt += f" The user is studying these words: [{topics_str}]. Try to bring up a topic related to these interests."
+            if user_name:
+                system_prompt += f"\n\n[USER INFO]\nThe user's name is: {user_name}\nCRITICAL: Output this name EXACTLY as written above — same characters, same script, no changes. Do NOT romanize it, do NOT transliterate it, do NOT convert it to another writing system, do NOT re-spell it. Write \"{user_name}\" verbatim every time you address the user. Do NOT ask the user what their name is."
+
+            if self.conversation_memory:
+                system_prompt += f"\n\n[Previous context]\n{self.conversation_memory}"
+
+            # Anti-circular: when conversation is long enough, nudge towards notebook topics
+            if len(self.conversation_history) >= 8:
+                system_prompt += "\n\nThe conversation may be getting repetitive. If it feels circular (e.g. just agreeing or complimenting back and forth), naturally steer to a new topic."
+                if notebook_words:
+                    topics_str = ", ".join(notebook_words[:15])
+                    system_prompt += f" The user is studying these words: [{topics_str}]. Try to bring up a topic related to these interests."
 
         messages = [{"role": "system", "content": system_prompt}]
         messages.extend(self.conversation_history)
@@ -255,11 +268,15 @@ Rules:
                 self.conversation_history.append({"role": "user", "content": user_text})
                 self.conversation_history.append({"role": "assistant", "content": self._cleanup_text(full)})
                 
-                # Compaction Layer (after 16 messages / 8 turns)
-                if len(self.conversation_history) > 16:
-                    to_compact = self.conversation_history[:-8]
-                    self.conversation_history = self.conversation_history[-8:]
-                    asyncio.create_task(self._compact_history(to_compact))
+                if token_mode == "low":
+                    if len(self.conversation_history) > 4:
+                        self.conversation_history = self.conversation_history[-4:]
+                else:
+                    # Compaction Layer (after 16 messages / 8 turns)
+                    if len(self.conversation_history) > 16:
+                        to_compact = self.conversation_history[:-8]
+                        self.conversation_history = self.conversation_history[-8:]
+                        asyncio.create_task(self._compact_history(to_compact))
                     
             yield delta, sentence, full_reply, ok, done, extras
             if not ok or done:
@@ -288,7 +305,7 @@ Rules:
     def start_scenario(self, intro_text):
         self.scenario_history = [{"role": "assistant", "content": intro_text}]
 
-    async def get_scenario_reply_stream(self, user_text, target_language, difficulty, scenario_dict, enable_grammar=True, enable_word_bank=True, user_name=None):
+    async def get_scenario_reply_stream(self, user_text, target_language, difficulty, scenario_dict, enable_grammar=True, enable_word_bank=True, user_name=None, voice_gender="female", token_mode="high"):
         self.scenario_history.append({"role": "user", "content": user_text})
 
         handholding = (
@@ -308,7 +325,19 @@ RULES:
 5. VERY IMPORTANT: The moment the user achieves the goal ({scenario_dict['goal']}), you MUST append the exact string "[GOAL_REACHED]" to the END of your reply. Do not forget!
 6. Do NOT ask the user for their name."""
 
-        if user_name:
+        if token_mode == "low":
+            system_prompt = f"Scenario: {scenario_dict['name']}. Goal: {scenario_dict['goal']}.\n1. 100% {target_language} ONLY. Max 30 words.\n2. When goal reached, append [GOAL_REACHED]."
+
+        gender_rules = f"You are a {voice_gender}. Match your speaking style, tone, and self-referential pronouns to your gender ({voice_gender})."
+        if target_language == "Japanese":
+            if voice_gender == "male":
+                gender_rules += " When referring to yourself, use '俺', '僕', or '私' (for formal)."
+            else:
+                gender_rules += " When referring to yourself, use '私', 'うち', 'あたし', or '僕' (for 僕っこ)."
+        
+        system_prompt += f"\n7. Persona: {gender_rules}"
+
+        if token_mode == "high" and user_name:
             system_prompt += f"\n\n[USER INFO]\nThe user's name is: {user_name}\nCRITICAL: Output this name EXACTLY as written above — same characters, same script, no changes. Do NOT romanize it, do NOT transliterate it, do NOT convert it to another writing system, do NOT re-spell it. Write \"{user_name}\" verbatim every time you address the user. Do NOT ask the user what their name is."
 
         system_prompt += """
@@ -325,8 +354,12 @@ Output ONLY your conversational reply. DO NOT output any thinking process, analy
             
             if done and ok:
                 self.scenario_history.append({"role": "assistant", "content": self._cleanup_text(full)})
-                if len(self.scenario_history) > 12:
-                    self.scenario_history = self.scenario_history[-12:]
+                if token_mode == "low":
+                    if len(self.scenario_history) > 4:
+                        self.scenario_history = self.scenario_history[-4:]
+                else:
+                    if len(self.scenario_history) > 12:
+                        self.scenario_history = self.scenario_history[-12:]
             
             yield delta, sentence, full_reply, ok, done, extras
             if not ok or done:
@@ -433,7 +466,7 @@ User: "안녕하세요" → PERFECT"""
 
     # ---------- Word Bank ----------
 
-    async def generate_word_bank(self, reply_text, target_language, include_decoys=False):
+    async def generate_word_bank(self, reply_text, target_language, include_decoys=False, token_mode="high"):
         cache_key = f"{target_language}:{reply_text.strip().lower()}:{include_decoys}"
         if cache_key in self.word_bank_cache:
             return self.word_bank_cache[cache_key], True
@@ -466,7 +499,7 @@ Mix nouns, verbs, particles, and punctuation. Do NOT use Romaji/Pinyin. Output O
             print(f"Word bank error: {e}")
             return [], False
 
-    async def analyze_grammar(self, user_text, target_language, difficulty, context_history=None):
+    async def analyze_grammar(self, user_text, target_language, difficulty, context_history=None, token_mode="high"):
         cache_key = f"grammar:{target_language}:{user_text.strip().lower()}:{hash(str(context_history))}"
         if cache_key in self.word_bank_cache:
             return self.word_bank_cache[cache_key], True
