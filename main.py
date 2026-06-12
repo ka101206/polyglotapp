@@ -179,7 +179,9 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
             await websocket.send_json({"type": "word_bank", "words": words})
 
     async def fetch_grammar(user_text, lang, diff, scenario):
-        grammar, ok = await ai_client.analyze_grammar(user_text, lang, diff)
+        history_msgs = ai_client.scenario_history[-4:] if scenario else ai_client.conversation_history[-4:]
+        history_str = "\n".join([f"{m.get('role')}: {m.get('content')}" for m in history_msgs if m.get('role')])
+        grammar, ok = await ai_client.analyze_grammar(user_text, lang, diff, context_history=history_str)
         print(f"[DEBUG] fetch_grammar output: '{grammar}'", flush=True)
         if ok and grammar:
             if grammar.strip() != "PERFECT":
@@ -336,6 +338,8 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
                     success = True
                     if extras.get("goal_reached"):
                         goal_reached = True
+                    if extras.get("tokens"):
+                        await websocket.send_json({"type": "tokens", "content": extras["tokens"]})
                     break
 
                 # Stream text to UI

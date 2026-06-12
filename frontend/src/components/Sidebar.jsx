@@ -63,20 +63,20 @@ export default function Sidebar({
           </div>
         </div>
         <div className="relative shrink-0">
-          <button onClick={() => setShowDropdown(!showDropdown)} className="p-2 text-slate-600 dark:text-slate-400 hover:text-black dark:text-white rounded-lg hover:bg-slate-200 dark:bg-slate-800 transition-colors">
+          <button onClick={() => setShowDropdown(!showDropdown)} className="p-2 text-slate-600 dark:text-slate-400 hover:text-black dark:hover:text-white rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors">
             <ChevronDown className={`w-5 h-5 transition-transform ${showDropdown ? 'rotate-180' : ''}`} />
           </button>
           {showDropdown && (
             <div className="absolute right-0 top-full mt-2 w-48 bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden py-1 z-50">
               <button 
                 onClick={() => { setShowSettings(true); setShowDropdown(false); }}
-                className="w-full px-4 py-2 text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:bg-slate-700 hover:text-black dark:text-white flex items-center gap-2 transition-colors"
+                className="w-full px-4 py-2 text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 hover:text-black dark:hover:text-white flex items-center gap-2 transition-colors"
               >
                 <Settings size={16} /> App Settings
               </button>
               <button 
                 onClick={() => { setShowAnalytics(true); setShowDropdown(false); }}
-                className="w-full px-4 py-2 text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:bg-slate-700 hover:text-black dark:text-white flex items-center gap-2 transition-colors"
+                className="w-full px-4 py-2 text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 hover:text-black dark:hover:text-white flex items-center gap-2 transition-colors"
               >
                 <BarChart2 size={16} /> Analytics
               </button>
@@ -97,7 +97,7 @@ export default function Sidebar({
         <button 
           onClick={() => setSidebarTab('notebook')}
           className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-colors ${
-            sidebarTab === 'notebook' ? 'bg-slate-200 dark:bg-slate-800 text-black dark:text-white shadow-sm border border-slate-300 dark:border-slate-700' : 'text-slate-500 hover:text-slate-700 dark:text-slate-300'
+            sidebarTab === 'notebook' ? 'bg-slate-200 dark:bg-slate-800 text-black dark:text-white shadow-sm border border-slate-300 dark:border-slate-700' : 'text-slate-500 hover:text-slate-700 dark:text-slate-300 dark:hover:text-slate-100 dark:hover:bg-slate-800/50'
           }`}
         >
           Notebook
@@ -105,7 +105,7 @@ export default function Sidebar({
         <button 
           onClick={() => setSidebarTab('scenarios')}
           className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-colors ${
-            sidebarTab === 'scenarios' ? 'bg-slate-200 dark:bg-slate-800 text-black dark:text-white shadow-sm border border-slate-300 dark:border-slate-700' : 'text-slate-500 hover:text-slate-700 dark:text-slate-300'
+            sidebarTab === 'scenarios' ? 'bg-slate-200 dark:bg-slate-800 text-black dark:text-white shadow-sm border border-slate-300 dark:border-slate-700' : 'text-slate-500 hover:text-slate-700 dark:text-slate-300 dark:hover:text-slate-100 dark:hover:bg-slate-800/50'
           }`}
         >
           Scenarios
@@ -148,7 +148,7 @@ export default function Sidebar({
                   }
                   triggerScenario(s.id);
                 }}
-                className="w-full text-left p-4 bg-slate-200 dark:bg-slate-800/60 hover:bg-slate-300 dark:bg-slate-700/80 border border-slate-300 dark:border-slate-700/50 hover:border-slate-400 dark:border-slate-600 rounded-xl transition-all shadow-sm group relative overflow-hidden"
+                className="w-full text-left p-4 bg-slate-200 dark:bg-slate-800/60 hover:bg-slate-300 dark:hover:bg-slate-700/80 border border-slate-300 dark:border-slate-700/50 hover:border-slate-400 dark:hover:border-slate-600 rounded-xl transition-all shadow-sm group relative overflow-hidden"
               >
                 <div className="flex items-center gap-3">
                   <div className="text-2xl group-hover:scale-110 transition-transform">{s.icon}</div>

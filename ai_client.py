@@ -41,6 +41,7 @@ class AIClient:
         text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
         text = re.sub(r'(?is)Here\'s a thinking process.*?</think>', '', text)
         text = re.sub(r'(?is)Here\'s a thinking process.*?✅\s*', '', text)
+        text = re.sub(r'\[GOAL_REACHED\]', '', text, flags=re.IGNORECASE)
         text = re.sub(r'(?is)Here\'s a thinking process.*?(?=(?:こんにちは|承知|分かり|はい|いいえ|もちろん|そうですね|よろしく|初めまして|[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]))', '', text)
         # Catch any lines starting with numbers, bullet points, or English reasoning phrases
         lines = text.split('\n')
@@ -84,6 +85,7 @@ class AIClient:
                 temperature=temperature,
                 max_tokens=max_tokens,
                 stream=True,
+                stream_options={"include_usage": True},
                 extra_body={"chat_template_kwargs": {"enable_thinking": False}},
             )
 
@@ -91,8 +93,12 @@ class AIClient:
             yielded_len = 0
             sentence_buf = ""
             safe_reply = ""
+            extras = {"goal_reached": False}
 
             async for chunk in stream:
+                if hasattr(chunk, 'usage') and chunk.usage:
+                    extras["tokens"] = chunk.usage.total_tokens
+
                 if chunk.choices and chunk.choices[0].delta.content:
                     token = chunk.choices[0].delta.content
                     full_text += token
@@ -122,7 +128,6 @@ class AIClient:
                 yield "", sentence_buf, safe_reply, True, False, {}
 
             # Parse extras at the end
-            extras = {"goal_reached": False}
             if re.search(r'\[GOAL_REACHED\]', full_text, re.IGNORECASE):
                 extras["goal_reached"] = True
 
@@ -192,43 +197,26 @@ class AIClient:
 
         register = self.current_register
 
-        # --- Build system prompt ---
         lang_rules = {
-            "Japanese": {
-                "script": "Japanese script only (漢字・ひらがな・カタカナ). No Romaji. No Chinese Hanzi (use 聞く not 听).",
-                "CASUAL": "Reply in タメ口 (plain form). No です/ます/ください/でしょうか/ございます. Use だ/だよ/よ/ね/かな/じゃん and plain verbs.",
-                "FORMAL": "Reply in 丁寧語 (です/ます form). Polite but natural, not stiff.",
-            },
-            "Korean": {
-                "script": "Hangul only. No English. No romanization.",
-                "CASUAL": "Reply in 반말. No 요/세요/습니다/ㅂ니다. Use 해/어/아/야/지/는데/거든/잖아.",
-                "FORMAL": "Reply in 해요체 (요 endings). Polite but warm.",
-            },
-            "Chinese": {
-                "script": "Simplified Chinese only. No Pinyin. No English. No Japanese characters.",
-                "CASUAL": "Use 你 (casual). Do not use 您.",
-                "FORMAL": "Use 您 (polite).",
-            },
+            "Japanese": {"script": "Japanese ONLY. No Romaji/English.", "CASUAL": "タメ口. Use だ/だよ.", "FORMAL": "丁寧語 (です/ます)."},
+            "Korean": {"script": "Hangul ONLY. No English/romanization.", "CASUAL": "반말. No 요/세요.", "FORMAL": "해요체 (요)."},
+            "Chinese": {"script": "Simplified Chinese ONLY. No Pinyin/English.", "CASUAL": "Use 你.", "FORMAL": "Use 您."},
         }
 
         lang = lang_rules.get(target_language, {
-            "script": f"Native {target_language} script only. No English. No transliterations.",
-            "CASUAL": "Use casual/informal register.",
-            "FORMAL": "Use polite/formal register.",
+            "script": f"{target_language} ONLY.",
+            "CASUAL": "casual",
+            "FORMAL": "formal",
         })
 
-        system_prompt = f"""You are a native {target_language} speaker texting with a friend. This is a casual chat, not a lesson.
+        system_prompt = f"""Role: Native {target_language} speaker texting a friend. Casual chat.
 
-How to reply:
-- Respond to what the user said. Acknowledge their message before adding anything new.
-- Keep it short: 1-2 sentences, under 30 words. Text like a real person, not a textbook.
-- Mix it up: react, agree, joke, share a thought, or ask something — but don't interrogate. Not every message needs a question.
-- If the user is brief, be brief back. Match their energy.
-- Avoid controversial, politically sensitive, or heavy topics (war, religion, politics, tragedy). Especially avoid topics that are culturally sensitive for {target_language} speakers. Keep things light and friendly.
-
-Register: {register} — {lang[register]}
-Script: {lang['script']}
-Write ONLY in {target_language}. Zero English words in your reply."""
+Rules:
+- 1-2 short sentences, <30 words. Natural, idiomatic phrasing (e.g. "steak", not "meat steak").
+- React, agree, joke, or ask. Match user's energy.
+- No heavy/sensitive topics.
+- Register: {register} ({lang[register]})
+- Script: {lang['script']}"""
 
         diff_rules = config.DIFFICULTY_PROMPT_MODIFIERS.get(difficulty, config.DIFFICULTY_PROMPT_MODIFIERS["Intermediate"])
         system_prompt += f"\nDifficulty: {difficulty}. {diff_rules}"
@@ -267,13 +255,33 @@ Write ONLY in {target_language}. Zero English words in your reply."""
                 self.conversation_history.append({"role": "user", "content": user_text})
                 self.conversation_history.append({"role": "assistant", "content": self._cleanup_text(full)})
                 
-                # Sliding Window History
-                if len(self.conversation_history) > 12:
-                    self.conversation_history = self.conversation_history[-12:]
+                # Compaction Layer (after 16 messages / 8 turns)
+                if len(self.conversation_history) > 16:
+                    to_compact = self.conversation_history[:-8]
+                    self.conversation_history = self.conversation_history[-8:]
+                    asyncio.create_task(self._compact_history(to_compact))
                     
             yield delta, sentence, full_reply, ok, done, extras
             if not ok or done:
                 break
+
+    async def _compact_history(self, msgs_to_compact):
+        try:
+            text = "\n".join([f"{m['role']}: {m['content']}" for m in msgs_to_compact])
+            prompt = f"Summarize this chat history concisely:\n{text}"
+            resp = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,
+                max_tokens=150
+            )
+            summary = resp.choices[0].message.content.strip()
+            if self.conversation_memory:
+                self.conversation_memory = self.conversation_memory + " " + summary
+            else:
+                self.conversation_memory = summary
+        except Exception as e:
+            print(f"[Compaction Error] {e}", flush=True)
 
     # ---------- Scenarios ----------
 
@@ -296,8 +304,8 @@ RULES:
 1. Stay in character.
 2. FORMALITY: Default to polite register. If the user speaks casually (e.g. plain-form verbs, no です/ます, 반말, etc.), match their casual tone immediately.
 3. ABSOLUTE LANGUAGE RULE: Speak 100% ONLY in {target_language}. NO Romaji. NO Pinyin. NO English (except acronyms like OK). Write ONLY in the native script of {target_language}. For Japanese: no Chinese Hanzi—use only Japanese Kanji.
-4. Max 30 words. {handholding}
-5. If user FULLY achieves their goal, append "[GOAL_REACHED]" to your response. Only if goal is conclusively met.
+4. Max 30 words. {handholding} Speak like a true native. Use natural, native, and idiomatic phrasing. Avoid redundant, weird, or overly explicit translated phrases (e.g. say "steak", not "meat steak").
+5. VERY IMPORTANT: The moment the user achieves the goal ({scenario_dict['goal']}), you MUST append the exact string "[GOAL_REACHED]" to the END of your reply. Do not forget!
 6. Do NOT ask the user for their name."""
 
         if user_name:
@@ -356,7 +364,7 @@ RULES:
    - Formality level choices (casual vs polite is the user's choice)
    - Simple greetings or exclamations (こんにちは, 안녕, 你好, etc.)
    - Sentence fragments that are natural in conversation
-   - Style preferences
+   - Style preferences (e.g. using kanji vs hiragana for words like 事 vs こと, or omitted particles that are common in casual speech)
 3. If the sentence is grammatically valid and understandable—even if casual, colloquial, fragmented, or simple—reply EXACTLY with the word "PERFECT".
 4. If there IS a real structural error (wrong particle, incorrect conjugation, impossible word order), give the correction + brief English explanation.
 5. {lang_script_rule}
@@ -458,29 +466,35 @@ Mix nouns, verbs, particles, and punctuation. Do NOT use Romaji/Pinyin. Output O
             print(f"Word bank error: {e}")
             return [], False
 
-    async def analyze_grammar(self, user_text, target_language, difficulty):
-        cache_key = f"grammar:{target_language}:{user_text.strip().lower()}"
+    async def analyze_grammar(self, user_text, target_language, difficulty, context_history=None):
+        cache_key = f"grammar:{target_language}:{user_text.strip().lower()}:{hash(str(context_history))}"
         if cache_key in self.word_bank_cache:
             return self.word_bank_cache[cache_key], True
 
         lang_script_rule = ""
         if target_language == "Japanese":
-            lang_script_rule = "Use ONLY Japanese Kanji/Kana for Japanese words. NEVER use Chinese Hanzi (e.g. 听 is WRONG, use 聞く). No Romaji."
+            lang_script_rule = "Use ONLY Japanese Kanji/Kana for Japanese words. NEVER use Chinese Hanzi (e.g. 听 is WRONG, use 聞く). ABSOLUTELY NO ROMAJI allowed anywhere."
         elif target_language == "Chinese":
-            lang_script_rule = "Use ONLY Simplified Chinese characters for Chinese words. No Pinyin."
+            lang_script_rule = "Use ONLY Simplified Chinese characters for Chinese words. ABSOLUTELY NO PINYIN allowed anywhere."
         elif target_language == "Korean":
-            lang_script_rule = "Use ONLY Hangul for Korean words. No romanization."
+            lang_script_rule = "Use ONLY Hangul for Korean words. ABSOLUTELY NO ROMANIZATION allowed anywhere."
         else:
             lang_script_rule = f"Use only native {target_language} script for {target_language} words."
 
-        sp = f"""You are a strict {target_language} grammar checker.
-IMPORTANT: Casual/informal speech is NOT a grammar error. Greetings, exclamations, and sentence fragments that are natural in conversation are CORRECT. Only flag real structural grammar errors (wrong particles, incorrect conjugation, impossible word order).
+        sp = f"""Role: Strict {target_language} grammar checker.
+Rules:
+- Casual speech/fragments = CORRECT.
+- Context matters: Omitted subjects/particles naturally dropped in conversation = CORRECT.
+- Flag ONLY structural errors (wrong conjugation, broken syntax).
 
-You MUST respond in this exact format:
-Grammar Correct: [YES or NO]
-Correction: [The corrected sentence, if NO. If YES, leave blank]
-Explanation: [Write your explanation ENTIRELY IN ENGLISH. {lang_script_rule} All other words MUST be English. No Romaji. No Pinyin.]"""
-        user_msg = f"Analyze the following sentence from a language learner: \"{user_text}\""
+Format:
+Grammar Correct: YES/NO
+Correction: [if NO]
+Explanation: [in English. {lang_script_rule}]"""
+        user_msg = ""
+        if context_history:
+            user_msg += f"Context:\n{context_history}\n\n"
+        user_msg += f"Sentence:\n\"{user_text}\""
         try:
             raw = await self._complete(
                 messages=[

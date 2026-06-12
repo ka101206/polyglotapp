@@ -23,6 +23,8 @@ export default function SettingsModal({
   setEnableWordBank,
   voiceGender,
   setVoiceGender,
+  showTokens,
+  setShowTokens,
   isDarkMode,
   setIsDarkMode
 }) {
@@ -219,13 +221,6 @@ export default function SettingsModal({
               </div>
             </label>
 
-            <label className="flex items-center justify-between cursor-pointer">
-              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Dark Mode</span>
-              <div className="relative">
-                <input type="checkbox" className="sr-only peer" checked={isDarkMode} onChange={(e) => setIsDarkMode(e.target.checked)} />
-                <div className="w-11 h-6 bg-slate-300 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
-              </div>
-            </label>
           </div>
 
           <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
@@ -296,6 +291,23 @@ export default function SettingsModal({
                 </button>
               </div>
             </div>
+          </div>
+
+          <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-4">
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Dark Mode</span>
+              <div className="relative">
+                <input type="checkbox" className="sr-only peer" checked={isDarkMode} onChange={(e) => setIsDarkMode(e.target.checked)} />
+                <div className="w-11 h-6 bg-slate-300 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+              </div>
+            </label>
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Show Token Usage</span>
+              <div className="relative">
+                <input type="checkbox" className="sr-only peer" checked={showTokens} onChange={(e) => setShowTokens(e.target.checked)} />
+                <div className="w-11 h-6 bg-slate-300 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+              </div>
+            </label>
           </div>
 
           <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-4">

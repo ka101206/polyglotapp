@@ -10,7 +10,8 @@ const MessageList = memo(function MessageList({
   setInlineFeedbackPopup,
   setSelectionToolbar,
   setDefinitionPopup,
-  messagesEndRef
+  messagesEndRef,
+  showTokens
 }) {
   const handleMouseUp = (e) => {
     const selection = window.getSelection().toString().trim();
@@ -54,8 +55,8 @@ const MessageList = memo(function MessageList({
                 </span>
                 Active Scenario: {m.id}
               </div>
-              <div className="text-sm font-medium text-blue-100 flex items-start gap-2">
-                <span className="text-blue-400 font-bold">Goal:</span> {m.goal}
+              <div className="text-sm font-medium text-blue-900 dark:text-blue-100 flex items-start gap-2">
+                <span className="text-blue-700 dark:text-blue-400 font-bold">Goal:</span> {m.goal}
               </div>
             </div>
             {m.messages.map((sMsg, j) => renderMessage(sMsg, `${keyStr}-${j}`))}
@@ -66,7 +67,7 @@ const MessageList = memo(function MessageList({
           <details key={`scenario-${keyStr}`} className="bg-slate-200 dark:bg-slate-800/40 border border-slate-300 dark:border-slate-700/50 rounded-2xl overflow-hidden group my-2">
             <summary className="p-4 font-bold text-slate-700 dark:text-slate-300 cursor-pointer hover:bg-slate-300 dark:bg-slate-700/50 transition-colors flex items-center justify-between outline-none">
               <span className="flex items-center gap-3">
-                <div className="w-6 h-6 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center text-xs border border-green-500/30">✓</div>
+                <div className="w-6 h-6 rounded-full bg-green-500/20 text-green-600 dark:text-green-400 flex items-center justify-center text-xs border border-green-500/30">✓</div>
                 Completed: {m.id}
               </span>
               <span className="text-xs font-semibold text-slate-500 bg-slate-200 dark:bg-slate-800/80 px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700">{m.messages.length} messages</span>
@@ -84,7 +85,7 @@ const MessageList = memo(function MessageList({
         key={keyStr}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex gap-3 w-full group hover:bg-slate-200 dark:bg-slate-800/30 py-2 px-3 rounded-2xl transition-colors"
+        className="flex gap-3 w-full group hover:bg-slate-200 dark:hover:bg-slate-700/50 dark:bg-slate-800/30 py-2 px-3 rounded-2xl transition-colors"
       >
         <div className="shrink-0 mt-1">
           {m.role === 'user' ? (
@@ -99,17 +100,22 @@ const MessageList = memo(function MessageList({
         </div>
         
         <div className="flex-1 relative space-y-1">
-          <div className="flex items-center gap-3">
-             <span className="font-semibold text-slate-800 dark:text-slate-200 text-sm">{m.role === 'user' ? (user?.nickname || user?.username || 'You') : 'Polyglot AI'}</span>
-             {m.role === 'user' && ((m.grammar && m.grammar.replace(/[^a-zA-Z]/g, '').toUpperCase() !== 'PERFECT') || m.pronunciation) && (
-               <button 
-                 onClick={() => setInlineFeedbackPopup(m)}
-                 className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/10 text-amber-400 rounded-full border border-amber-500/20 hover:bg-amber-500/20 transition-colors text-[10px] font-bold tracking-wide uppercase shadow-sm"
-                 title="View Feedback"
-               >
-                 <AlertTriangle size={12} /> Feedback
-               </button>
-             )}
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-3">
+               <span className="font-semibold text-slate-800 dark:text-slate-200 text-sm">{m.role === 'user' ? (user?.nickname || user?.username || 'You') : 'Polyglot AI'}</span>
+               {m.role === 'user' && ((m.grammar && m.grammar.replace(/[^a-zA-Z]/g, '').toUpperCase() !== 'PERFECT') || m.pronunciation) && (
+                 <button 
+                   onClick={() => setInlineFeedbackPopup(m)}
+                   className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/10 text-amber-700 dark:text-amber-400 rounded-full border border-amber-500/30 dark:border-amber-500/20 hover:bg-amber-500/20 transition-colors text-[10px] font-bold tracking-wide uppercase shadow-sm"
+                   title="View Feedback"
+                 >
+                   <AlertTriangle size={12} /> Feedback
+                 </button>
+               )}
+            </div>
+            {showTokens && m.tokens && (
+               <span className="text-[10px] font-medium text-slate-400">Tokens: {m.tokens}</span>
+            )}
           </div>
           
           <div className="text-[17px] leading-relaxed text-slate-700 dark:text-slate-300 font-medium">

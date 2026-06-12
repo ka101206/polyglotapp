@@ -6,7 +6,7 @@ services:
     container_name: polyglot-spark-db
     environment:
       POSTGRES_USER: ${POLYGLOT_DB_USER:-polyglot}
-      POSTGRES_PASSWORD: ${POLYGLOT_DB_PASSWORD:?Set POLYGLOT_DB_PASSWORD in .env.spark}
+      POSTGRES_PASSWORD: ${POLYGLOT_DB_PASSWORD:?Set POLYGLOT_DB_PASSWORD in .env}
       POSTGRES_DB: ${POLYGLOT_DB_NAME:-polyglot}
     volumes:
       - polyglot_spark_pgdata:/var/lib/postgresql/data
@@ -29,7 +29,7 @@ services:
       dockerfile: backend.Dockerfile
     container_name: polyglot-spark-backend
     environment:
-      DATABASE_URL: postgresql://${POLYGLOT_DB_USER:-polyglot}:${POLYGLOT_DB_PASSWORD:?Set POLYGLOT_DB_PASSWORD in .env.spark}@db:5432/${POLYGLOT_DB_NAME:-polyglot}
+      DATABASE_URL: postgresql://${POLYGLOT_DB_USER:-polyglot}:${POLYGLOT_DB_PASSWORD:?Set POLYGLOT_DB_PASSWORD in .env}@db:5432/${POLYGLOT_DB_NAME:-polyglot}
       VLLM_URL: ${POLYGLOT_VLLM_URL:-http://host.docker.internal:8000/v1}
       AI_MODEL: ${POLYGLOT_AI_MODEL:-qwen2.5-7b-fp8}
       OPENAI_API_KEY: ${POLYGLOT_OPENAI_API_KEY:-token-nv}

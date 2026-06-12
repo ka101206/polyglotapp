@@ -102,7 +102,7 @@ export default function ChatInput({
         <button
           type="submit"
           disabled={!input.trim()}
-          className="w-12 h-12 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-200 dark:bg-slate-800 disabled:text-slate-500 text-black dark:text-white rounded-xl flex items-center justify-center transition-all shadow-lg shadow-blue-500/20 shrink-0"
+          className="w-12 h-12 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-200 dark:disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-xl flex items-center justify-center transition-all shadow-lg shadow-blue-500/20 shrink-0"
         >
           <Send size={18} className={input.trim() ? "translate-x-0.5" : ""} />
         </button>
@@ -112,7 +112,7 @@ export default function ChatInput({
           className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-lg shrink-0 ${
             isRecording 
               ? 'bg-red-500 hover:bg-red-600 text-black dark:text-white shadow-red-500/30 animate-pulse' 
-              : 'bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
+              : 'bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
           }`}
         >
           {isRecording ? <Square size={18} /> : <Mic size={18} />}

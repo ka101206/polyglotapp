@@ -9,7 +9,7 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
   const [isTTSWarmingUp, setIsTTSWarmingUp] = useState(false);
   
   const ws = useRef(null);
-  const audioContext = useRef(null);
+  const audioRef = useRef(new Audio());
 
   const onWordBankRef = useRef(onWordBankReceived);
   useEffect(() => {
@@ -38,31 +38,15 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
       const base64Audio = audioPlayQueue.shift();
       
       try {
-        if (!audioContext.current) {
-          audioContext.current = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        
-        // Browsers often start AudioContext in 'suspended' state until a user interacts.
-        // We must resume it, or else audio time never advances and onended never fires!
-        if (audioContext.current.state === 'suspended') {
-          await audioContext.current.resume();
-        }
-        
-        const binaryString = window.atob(base64Audio);
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        
-        const audioBuffer = await audioContext.current.decodeAudioData(bytes.buffer);
-        const source = audioContext.current.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(audioContext.current.destination);
-        source.onended = () => {
+        audioRef.current.src = "data:audio/mp3;base64," + base64Audio;
+        audioRef.current.onended = () => {
           playNextInQueue();
         };
-        source.start(0);
+        audioRef.current.onerror = (e) => {
+          console.error("Audio element error:", e);
+          playNextInQueue();
+        };
+        await audioRef.current.play();
       } catch (e) {
         console.error("Audio playback error:", e);
         playNextInQueue();
@@ -181,6 +165,22 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
         if (!isPlaying) playNextInQueue();
       } else if (data.type === 'error') {
         console.error("AI Error:", data.content);
+      } else if (data.type === 'tokens') {
+        setMessages(prev => {
+          const newMsg = [...prev];
+          const last = newMsg.length > 0 ? { ...newMsg[newMsg.length - 1] } : null;
+          if (last && last.type === 'scenario' && last.status === 'active') {
+             const sMsgs = [...last.messages];
+             if (sMsgs.length > 0 && sMsgs[sMsgs.length - 1].role === 'ai') {
+               sMsgs[sMsgs.length - 1].tokens = data.content;
+             }
+             last.messages = sMsgs;
+             newMsg[newMsg.length - 1] = last;
+          } else if (newMsg.length > 0 && newMsg[newMsg.length - 1].role === 'ai') {
+             newMsg[newMsg.length - 1].tokens = data.content;
+          }
+          return newMsg;
+        });
       } else if (data.type === 'tts_warmup_start') {
         setIsTTSWarmingUp(true);
       } else if (data.type === 'tts_warmup_done') {
@@ -214,8 +214,17 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
     }
   }, [language, voiceGender]);
 
+  const unlockAudio = useCallback(() => {
+    // Play a tiny silent WAV to unlock the audio engine on Safari and clear previous src
+    audioRef.current.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
+    audioRef.current.play().catch(() => {});
+  }, []);
+
   const sendMessage = useCallback((textToSend, duration = null) => {
     if (!textToSend.trim() || !ws.current) return;
+    
+    // Play a silent sound to unlock audio engine on Safari and clear previous src
+    unlockAudio();
     
     setMessages(prev => {
       const newMsg = [...prev];
@@ -257,6 +266,8 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
   const sendTutorMessage = useCallback((tutorInput, inlineFeedbackPopup) => {
     if (!tutorInput.trim() || !ws.current) return;
     
+    unlockAudio();
+    
     setTutorChatHistory(prev => [...prev, { role: 'user', content: tutorInput }]);
     setIsTutorTyping(true);
     
@@ -272,6 +283,8 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
   }, [tutorChatHistory, language, readingMode]);
 
   const triggerScenario = useCallback((scenarioId) => {
+    unlockAudio();
+
     if (ws.current) {
         ws.current.send(JSON.stringify({
             type: 'start_scenario',

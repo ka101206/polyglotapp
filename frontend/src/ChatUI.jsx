@@ -25,6 +25,7 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
   const [enableGrammar, setEnableGrammar] = useState(() => localStorage.getItem('polyglot_enable_grammar') !== 'false');
   const [enableWordBank, setEnableWordBank] = useState(() => localStorage.getItem('polyglot_enable_word_bank') !== 'false');
   const [voiceGender, setVoiceGender] = useState(() => localStorage.getItem('polyglot_voice_gender') || 'female');
+  const [showTokens, setShowTokens] = useState(() => localStorage.getItem('polyglot_show_tokens') === 'true');
   const [showSettings, setShowSettings] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -230,6 +231,7 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
             setSelectionToolbar={setSelectionToolbar}
             setDefinitionPopup={setDefinitionPopup}
             messagesEndRef={messagesEndRef}
+            showTokens={showTokens}
           />
 
           <SelectionToolbar 
@@ -325,6 +327,11 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
           setVoiceGender={(val) => {
             setVoiceGender(val);
             localStorage.setItem('polyglot_voice_gender', val);
+          }}
+          showTokens={showTokens}
+          setShowTokens={(val) => {
+            setShowTokens(val);
+            localStorage.setItem('polyglot_show_tokens', val);
           }}
           isDarkMode={isDarkMode}
           setIsDarkMode={setIsDarkMode}

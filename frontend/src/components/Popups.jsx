@@ -151,18 +151,18 @@ export function InlineFeedbackPopup({
         
         <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2">
           {inlineFeedbackPopup.grammar && (
-            <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-xl text-amber-200/90 text-sm leading-relaxed whitespace-pre-wrap font-medium">
-              <div className="text-amber-400 font-bold mb-2 uppercase tracking-wider text-xs flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-amber-400"></div>
+            <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-xl text-amber-900 dark:text-amber-200/90 text-sm leading-relaxed whitespace-pre-wrap font-medium">
+              <div className="text-amber-700 dark:text-amber-400 font-bold mb-2 uppercase tracking-wider text-xs flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-600 dark:bg-amber-400"></div>
                 Grammar
               </div>
               {inlineFeedbackPopup.grammar}
             </div>
           )}
           {inlineFeedbackPopup.pronunciation && (
-            <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl text-blue-200/90 text-sm leading-relaxed whitespace-pre-wrap font-medium">
-              <div className="text-blue-400 font-bold mb-2 uppercase tracking-wider text-xs flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-blue-400"></div>
+            <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl text-blue-900 dark:text-blue-200/90 text-sm leading-relaxed whitespace-pre-wrap font-medium">
+              <div className="text-blue-700 dark:text-blue-400 font-bold mb-2 uppercase tracking-wider text-xs flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-blue-600 dark:bg-blue-400"></div>
                 Pronunciation
               </div>
               {inlineFeedbackPopup.pronunciation}
@@ -207,7 +207,7 @@ export function InlineFeedbackPopup({
           <button
             type="submit"
             disabled={!tutorInput.trim() || isTutorTyping}
-            className="w-10 h-10 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-200 dark:bg-slate-800 disabled:text-slate-500 text-black dark:text-white rounded-xl flex items-center justify-center transition-all"
+            className="w-10 h-10 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-200 dark:disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-xl flex items-center justify-center transition-all"
           >
             <Send size={16} className={tutorInput.trim() ? "translate-x-0.5" : ""} />
           </button>
