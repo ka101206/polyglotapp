@@ -21,30 +21,11 @@ http://10.74.10.244:18080
 
 ## Required Assets
 
-Before building, place the TTS model assets in the project directory:
+The backend uses large TTS models (Style-Bert-VITS2, MeloTTS, CosyVoice2) that are automatically downloaded from Hugging Face the first time they are used. 
 
-```text
-kokoro-v1.0.onnx
-voices.bin
-models/es_ES-sharvard-medium.onnx
-models/fr_FR-tom-medium.onnx
-models/it_IT-riccardo-x_low.onnx
-```
+The `docker-compose.spark.yml` maps a persistent Docker volume (`hf_cache`) to `/root/.cache/huggingface` in the backend container so these models do not need to be redownloaded if the container restarts.
 
-The provided `download_models.sh` downloads them, but it requires outbound network
-access:
-
-```bash
-./download_models.sh
-```
-
-The Spark compose file mounts these files into the backend read-only at runtime. They are
-not copied into the Docker image and are intentionally ignored by git. If
-`kokoro-v1.0.onnx` or `voices.bin` is missing, `docker compose up` fails instead of
-starting a backend with broken Japanese TTS.
-
-Japanese TTS needs `kokoro-v1.0.onnx` and `voices.bin`. Edge TTS and Google STT also
-require outbound internet at runtime.
+**Note:** The backend requires outbound internet access to download these models on their first run. Edge TTS and Google STT also require outbound internet access at runtime.
 
 ## Deploy
 
