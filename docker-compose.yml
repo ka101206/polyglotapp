@@ -1,66 +1,91 @@
+name: polyglot-spark
+
 services:
   db:
     image: pgvector/pgvector:pg16
-    container_name: polyglot-db
+    container_name: polyglot-spark-db
     environment:
-      - POSTGRES_PASSWORD=polyglot_secret
-      - POSTGRES_USER=polyglot
-      - POSTGRES_DB=polyglot
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POLYGLOT_DB_USER:-polyglot}
+      POSTGRES_PASSWORD: ${POLYGLOT_DB_PASSWORD:?Set POLYGLOT_DB_PASSWORD in .env.spark}
+      POSTGRES_DB: ${POLYGLOT_DB_NAME:-polyglot}
     volumes:
-      - pgdata:/var/lib/postgresql/data
-    restart: always
-
-#  vllm:
-#    image: vllm/vllm-openai:latest
-#    container_name: polyglot-vllm
-#    command: --model Qwen/Qwen2.5-7B-Instruct --host 0.0.0.0 --port 8000 --enable-prefix-caching
-#    ports:
-#      - "8000:8000"
-#    volumes:
-#      - ~/.cache/huggingface:/root/.cache/huggingface
-#    deploy:
-#      resources:
-#        reservations:
-#          devices:
-#            - driver: nvidia
-#              count: all
-#              capabilities: [gpu]
-#    restart: unless-stopped
+      - polyglot_spark_pgdata:/var/lib/postgresql/data
+    networks:
+      - polyglot-spark
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
 
   backend:
-    build: 
+    build:
       context: .
       dockerfile: backend.Dockerfile
-    container_name: polyglot-backend
-    ports:
-      - "8081:8081"
-    volumes:
-      - .:/app
+    container_name: polyglot-spark-backend
     environment:
-      - DATABASE_URL=postgresql://polyglot:polyglot_secret@db:5432/polyglot
-      - VLLM_URL=${VLLM_URL:-http://host.docker.internal:11434/v1}
-      - AI_MODEL=${AI_MODEL:-qwen2.5}
+      DATABASE_URL: postgresql://${POLYGLOT_DB_USER:-polyglot}:${POLYGLOT_DB_PASSWORD:?Set POLYGLOT_DB_PASSWORD in .env.spark}@db:5432/${POLYGLOT_DB_NAME:-polyglot}
+      VLLM_URL: ${POLYGLOT_VLLM_URL:-http://host.docker.internal:8000/v1}
+      AI_MODEL: ${POLYGLOT_AI_MODEL:-qwen2.5-7b-fp8}
+      OPENAI_API_KEY: ${POLYGLOT_OPENAI_API_KEY:-token-nv}
+    ports:
+      - "${POLYGLOT_BACKEND_PORT:-18082}:8081"
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
-      - db
-    restart: always
+      db:
+        condition: service_healthy
+    networks:
+      - polyglot-spark
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health', timeout=3)\"",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
 
   frontend:
     build:
       context: ./frontend
       dockerfile: frontend.Dockerfile
-    container_name: polyglot-frontend
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+    container_name: polyglot-spark-frontend
     environment:
-      - VITE_API_URL=http://localhost:8081
+      VITE_API_URL: ${POLYGLOT_PUBLIC_API_URL:-http://10.74.10.244:18082}
+    ports:
+      - "${POLYGLOT_FRONTEND_PORT:-18080}:3000"
     depends_on:
-      - backend
-    restart: always
+      backend:
+        condition: service_healthy
+    networks:
+      - polyglot-spark
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3000').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\"",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+networks:
+  polyglot-spark:
+    name: polyglot-spark
 
 volumes:
-  pgdata:
+  polyglot_spark_pgdata:
+    name: aboveavg_polyglot_spark_pgdata
+  hf_cache:
+    name: aboveavg_polyglot_hf_cache

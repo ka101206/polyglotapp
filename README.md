@@ -23,43 +23,27 @@ A modern, full-stack AI language learning web application. It features a React f
 
 ### 1. Configure Environment
 
-Create a `.env` file in the project root to configure your API keys. If deploying via Docker, refer to `.env.spark.example`:
+Create a `.env` file in the project root by copying the example:
 
-```env
-OPENAI_API_KEY=your_api_key_here
+```bash
+cp .env.example .env
 ```
 
-### 2. Run the Backend (FastAPI)
+Edit the `.env` file and set your desired `POLYGLOT_DB_PASSWORD` and `OPENAI_API_KEY` (if not using vLLM).
 
-You can run the backend natively or via Docker.
+### 2. Deploy via Docker
+
+The entire application (Database, Backend, and Frontend) runs seamlessly on Docker. 
 
 **Note on TTS Models:**
-The backend uses large TTS models (Style-Bert-VITS2, MeloTTS, CosyVoice2) that are **automatically downloaded** from Hugging Face on their first use. If running via Docker, these are cached in a persistent volume (`hf_cache`).
+The backend uses large TTS models (Style-Bert-VITS2, MeloTTS, CosyVoice2) that are **automatically downloaded** from Hugging Face on their first use. These are cached in a persistent volume (`hf_cache`) so they do not need to be redownloaded on restart.
 
-**Native (Requires Python 3.11+):**
+Run the following command to build and deploy all services:
 ```bash
-pip install -r requirements.txt
-python main.py
-```
-The backend will run on `http://localhost:8081`.
-
-**Docker:**
-```bash
-docker build -t polyglot-backend -f backend.Dockerfile .
-docker run -p 8081:8081 -v polyglot_hf_cache:/root/.cache/huggingface --env-file .env polyglot-backend
+docker compose up -d --build
 ```
 
-### 3. Run the Frontend (React)
-
-Open a new terminal and navigate to the `frontend` directory:
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Navigate to `http://localhost:3000` (or the port provided by Vite) in your browser.
+The application will be accessible at `http://localhost:18080` (or your host IP address at port 18080).
 
 ## Key Architecture
 
