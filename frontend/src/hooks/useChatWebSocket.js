@@ -6,6 +6,7 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
   const [isAiSpeaking, setIsAiSpeaking] = useState(false);
   const [tutorChatHistory, setTutorChatHistory] = useState([]);
   const [isTutorTyping, setIsTutorTyping] = useState(false);
+  const [isTTSWarmingUp, setIsTTSWarmingUp] = useState(false);
   
   const ws = useRef(null);
   const audioContext = useRef(null);
@@ -41,6 +42,12 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
           audioContext.current = new (window.AudioContext || window.webkitAudioContext)();
         }
         
+        // Browsers often start AudioContext in 'suspended' state until a user interacts.
+        // We must resume it, or else audio time never advances and onended never fires!
+        if (audioContext.current.state === 'suspended') {
+          await audioContext.current.resume();
+        }
+        
         const binaryString = window.atob(base64Audio);
         const len = binaryString.length;
         const bytes = new Uint8Array(len);
@@ -52,7 +59,9 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
         const source = audioContext.current.createBufferSource();
         source.buffer = audioBuffer;
         source.connect(audioContext.current.destination);
-        source.onended = playNextInQueue;
+        source.onended = () => {
+          playNextInQueue();
+        };
         source.start(0);
       } catch (e) {
         console.error("Audio playback error:", e);
@@ -172,7 +181,17 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
         if (!isPlaying) playNextInQueue();
       } else if (data.type === 'error') {
         console.error("AI Error:", data.content);
+      } else if (data.type === 'tts_warmup_start') {
+        setIsTTSWarmingUp(true);
+      } else if (data.type === 'tts_warmup_done') {
+        setIsTTSWarmingUp(false);
       }
+    };
+
+    socket.onopen = () => {
+      // Warmup on initial connection
+      setIsTTSWarmingUp(true);
+      socket.send(JSON.stringify({ type: 'warmup_tts', language, gender: voiceGender }));
     };
 
     return () => {
@@ -180,6 +199,20 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
       if (ws.current === socket) ws.current = null;
     };
   }, [user_id]);
+
+  const prevLangForWarmup = useRef(language);
+  const prevGenderForWarmup = useRef(voiceGender);
+
+  useEffect(() => {
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+      if (prevLangForWarmup.current !== language || prevGenderForWarmup.current !== voiceGender) {
+        setIsTTSWarmingUp(true);
+        ws.current.send(JSON.stringify({ type: 'warmup_tts', language, gender: voiceGender }));
+        prevLangForWarmup.current = language;
+        prevGenderForWarmup.current = voiceGender;
+      }
+    }
+  }, [language, voiceGender]);
 
   const sendMessage = useCallback((textToSend, duration = null) => {
     if (!textToSend.trim() || !ws.current) return;
@@ -219,7 +252,7 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
       ws.current.send(JSON.stringify({ type: 'repeat', text, language, speed, gender: voiceGender }));
     }
-  }, [language]);
+  }, [language, voiceGender]);
 
   const sendTutorMessage = useCallback((tutorInput, inlineFeedbackPopup) => {
     if (!tutorInput.trim() || !ws.current) return;
@@ -268,6 +301,7 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
     sendMessage,
     replayText,
     sendTutorMessage,
-    triggerScenario
+    triggerScenario,
+    isTTSWarmingUp
   };
 }

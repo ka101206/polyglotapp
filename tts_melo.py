@@ -157,6 +157,8 @@ class MeloTTSEngine:
             If the underlying model fails to synthesise.
         """
         language = language.upper()
+        lang_map = {"SPANISH": "ES", "FRENCH": "FR", "ES": "ES", "FR": "FR"}
+        language = lang_map.get(language, language)
         if language not in SUPPORTED_LANGUAGES:
             raise ValueError(
                 f"Unsupported language '{language}'. "

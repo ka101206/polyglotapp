@@ -41,9 +41,9 @@ _VOICE_CONFIG = {
     "male": {
         "repo_id": "litagin/style_bert_vits2_jvnv",
         "local_dir": "jvnv",
-        "model_file": "jvnv.safetensors",
-        "config_file": "config.json",
-        "style_file": "style_vectors.npy",
+        "model_file": "jvnv-M1-jp/jvnv-M1-jp_e158_s14000.safetensors",
+        "config_file": "jvnv-M1-jp/config.json",
+        "style_file": "jvnv-M1-jp/style_vectors.npy",
         "speaker": "jvnv-M1-jp",  # male speaker in multi-speaker model
     },
 }
@@ -198,13 +198,13 @@ class StyleBertVITS2Engine:
         
         model.load()
         
-        model.load()
-        
-        # Preload the BERT model for Japanese and force it to float32
+        # Preload the BERT model and tokenizer for Japanese to cache them and avoid path assertions
         try:
-            from style_bert_vits2.nlp.bert_models import load_model
+            from style_bert_vits2.nlp.bert_models import load_model, load_tokenizer
             from style_bert_vits2.constants import Languages
-            bert_model = load_model(Languages.JP)
+            logger.info("Preloading Japanese BERT tokenizer and model from Hugging Face...")
+            load_tokenizer(Languages.JP, "ku-nlp/deberta-v2-large-japanese-char-wwm")
+            bert_model = load_model(Languages.JP, "ku-nlp/deberta-v2-large-japanese-char-wwm")
             bert_model.float()
         except Exception as e:
             logger.warning(f"Failed to preload BERT model: {e}")

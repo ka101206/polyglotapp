@@ -21,11 +21,11 @@ export default function ChatInput({
   onRepeat
 }) {
   return (
-    <div className="p-4 bg-slate-900 border-t border-slate-800 shrink-0 z-10">
+    <div className="p-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shrink-0 z-10">
       {(wordBankPool.length > 0 || assembledWords.length > 0) && (
-        <div className="mb-3 bg-slate-800/50 border border-slate-700/50 rounded-xl p-3">
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Build your response</div>
-          <div className="min-h-[2.5rem] flex flex-wrap gap-1.5 items-center bg-slate-900/50 border-b border-slate-700 p-2 rounded-t-lg mb-2">
+        <div className="mb-3 bg-slate-200 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700/50 rounded-xl p-3">
+          <div className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">Build your response</div>
+          <div className="min-h-[2.5rem] flex flex-wrap gap-1.5 items-center bg-slate-50 dark:bg-slate-900/50 border-b border-slate-300 dark:border-slate-700 p-2 rounded-t-lg mb-2">
             {assembledWords.length === 0 && (
               <span className="text-slate-500 italic text-xs">Select words from the bank below...</span>
             )}
@@ -33,7 +33,7 @@ export default function ChatInput({
               <button
                 key={`assembled-${idx}`}
                 onClick={() => removeWordFromAssembly(word, idx)}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-sm text-sm transition-transform active:scale-95"
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-black dark:text-white rounded-lg shadow-sm text-sm transition-transform active:scale-95"
               >
                 {word}
               </button>
@@ -44,7 +44,7 @@ export default function ChatInput({
               <button
                 key={`pool-${idx}`}
                 onClick={() => addWordToAssembly(word, idx)}
-                className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 rounded-lg shadow-sm text-sm transition-transform active:scale-95"
+                className="px-3 py-1.5 bg-slate-300 dark:bg-slate-700 hover:bg-slate-400 dark:bg-slate-600 text-slate-800 dark:text-slate-200 border border-slate-400 dark:border-slate-600 rounded-lg shadow-sm text-sm transition-transform active:scale-95"
               >
                 {word}
               </button>
@@ -55,12 +55,12 @@ export default function ChatInput({
       
       <div className="flex items-center gap-2 mb-2">
 
-        <div className="flex items-center gap-2 bg-slate-800/50 px-3 py-1.5 rounded-lg border border-slate-700/50 shrink-0 w-72">
-          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap min-w-[65px]">Voice: {ttsSpeed.toFixed(1)}x</span>
+        <div className="flex items-center gap-2 bg-slate-200 dark:bg-slate-800/50 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700/50 shrink-0 w-72">
+          <span className="text-[9px] font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap min-w-[65px]">Voice: {ttsSpeed.toFixed(1)}x</span>
           <input type="range" min="0.5" max="2.0" step="0.1" value={ttsSpeed} onChange={(e) => setTtsSpeed(parseFloat(e.target.value))} className="w-full accent-blue-500" />
         </div>
-        <div className="flex items-center gap-2 bg-slate-800/50 px-3 py-1.5 rounded-lg border border-slate-700/50 shrink-0 w-72">
-          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap min-w-[65px]">Replay: {replaySpeed.toFixed(1)}x</span>
+        <div className="flex items-center gap-2 bg-slate-200 dark:bg-slate-800/50 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700/50 shrink-0 w-72">
+          <span className="text-[9px] font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap min-w-[65px]">Replay: {replaySpeed.toFixed(1)}x</span>
           <input type="range" min="0.5" max="2.0" step="0.1" value={replaySpeed} onChange={(e) => setReplaySpeed(parseFloat(e.target.value))} className="w-full accent-blue-500" />
         </div>
 
@@ -72,7 +72,7 @@ export default function ChatInput({
                 ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
                 : isThinking
                   ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                  : 'bg-slate-800/50 text-slate-500 border-slate-700/50'
+                  : 'bg-slate-200 dark:bg-slate-800/50 text-slate-500 border-slate-300 dark:border-slate-700/50'
           }`}>
             {(isRecording || isAiSpeaking || isThinking) && (
               <span className="relative flex h-1.5 w-1.5">
@@ -85,7 +85,7 @@ export default function ChatInput({
               </span>
             )}
             {!isRecording && !isAiSpeaking && !isThinking && (
-              <span className="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-slate-600"></span>
             )}
             {isRecording ? 'Listening' : isAiSpeaking ? 'Speaking' : isThinking ? 'Thinking' : 'Idle'}
           </div>
@@ -97,12 +97,12 @@ export default function ChatInput({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Type your message..."
-          className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-500"
+          className="flex-1 bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-black dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-500"
         />
         <button
           type="submit"
           disabled={!input.trim()}
-          className="w-12 h-12 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-xl flex items-center justify-center transition-all shadow-lg shadow-blue-500/20 shrink-0"
+          className="w-12 h-12 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-200 dark:bg-slate-800 disabled:text-slate-500 text-black dark:text-white rounded-xl flex items-center justify-center transition-all shadow-lg shadow-blue-500/20 shrink-0"
         >
           <Send size={18} className={input.trim() ? "translate-x-0.5" : ""} />
         </button>
@@ -111,8 +111,8 @@ export default function ChatInput({
           onClick={toggleRecording}
           className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-lg shrink-0 ${
             isRecording 
-              ? 'bg-red-500 hover:bg-red-600 text-white shadow-red-500/30 animate-pulse' 
-              : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+              ? 'bg-red-500 hover:bg-red-600 text-black dark:text-white shadow-red-500/30 animate-pulse' 
+              : 'bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
           }`}
         >
           {isRecording ? <Square size={18} /> : <Mic size={18} />}

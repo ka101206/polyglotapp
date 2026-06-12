@@ -9,7 +9,7 @@ import Sidebar from './components/Sidebar';
 import SettingsModal from './components/SettingsModal';
 import { SelectionToolbar, DefinitionPopup, InlineFeedbackPopup } from './components/Popups';
 
-export default function ChatUI({ user, initialLanguage, onLogout, setUser }) {
+export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDarkMode, setIsDarkMode }) {
   const [language, setLanguage] = useState(() => initialLanguage || localStorage.getItem('polyglot_language') || 'Japanese');
   const [difficulty, setDifficulty] = useState(() => {
     const savedLang = localStorage.getItem('polyglot_language') || 'Japanese';
@@ -145,7 +145,8 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser }) {
     sendMessage,
     replayText,
     sendTutorMessage,
-    triggerScenario
+    triggerScenario,
+    isTTSWarmingUp
   } = useChatWebSocket(user.user_id, language, difficulty, readingMode, ttsSpeed, enableGrammar, enableWordBank, voiceGender, (words) => {
     setWordBankPool(words);
     setAssembledWords([]);
@@ -206,11 +207,19 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser }) {
 
   return (
     <ErrorBoundary>
-      <div lang={langCode} className="flex h-screen bg-slate-900 text-slate-100 font-sans relative overflow-hidden">
+      <div lang={langCode} className="flex h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-sans relative overflow-hidden">
         
+        {isTTSWarmingUp && (
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900/80 backdrop-blur-sm transition-opacity duration-300">
+            <div className="w-16 h-16 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-6"></div>
+            <p className="text-2xl font-medium text-slate-800 dark:text-slate-200">Warming up voice model...</p>
+            <p className="text-base text-slate-600 dark:text-slate-400 mt-2">Loading high-quality TTS for {language}</p>
+          </div>
+        )}
+
         {/* Main Chat Area (Left Side) */}
         <div className="flex-1 flex flex-col relative">
-          <div className="h-2 bg-slate-900 border-b border-slate-800 shrink-0 z-10 w-full" />
+          <div className="h-2 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0 z-10 w-full" />
           
           <MessageList 
             user={user}
@@ -317,6 +326,8 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser }) {
             setVoiceGender(val);
             localStorage.setItem('polyglot_voice_gender', val);
           }}
+          isDarkMode={isDarkMode}
+          setIsDarkMode={setIsDarkMode}
         />
 
         {showAnalytics && <AnalyticsDashboard user={user} onClose={() => setShowAnalytics(false)} />}

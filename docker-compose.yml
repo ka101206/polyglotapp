@@ -40,8 +40,8 @@ services:
       - .:/app
     environment:
       - DATABASE_URL=postgresql://polyglot:polyglot_secret@db:5432/polyglot
-      - VLLM_URL=http://host.docker.internal:11434/v1
-      - AI_MODEL=qwen2.5
+      - VLLM_URL=${VLLM_URL:-http://host.docker.internal:11434/v1}
+      - AI_MODEL=${AI_MODEL:-qwen2.5}
     depends_on:
       - db
     restart: always

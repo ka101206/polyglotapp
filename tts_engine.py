@@ -21,11 +21,6 @@ class TTSEngine:
         self._chatterbox = None  # Italian (Chatterbox)
         self._cosyvoice = None   # Chinese/Korean (CosyVoice2)
 
-        # Legacy Kokoro engine (kept as fallback for JP male if JVNV unavailable)
-        self._kokoro = None
-        self._ja_g2p = None
-        self._kokoro_lock = threading.Lock()
-
     def _get_sbv2(self):
         if self._sbv2 is None:
             try:
@@ -71,6 +66,26 @@ class TTSEngine:
 
     def reset(self):
         self.stop_flag.clear()
+
+    async def warmup(self, language="Japanese", gender="female"):
+        """Pre-load the TTS model for the given language and gender by generating a short dummy string."""
+        print(f"[DEBUG] Warming up TTS for {language} ({gender})...")
+        try:
+            # Use a harmless short string to trigger model loading and inference compilation
+            if language == "Japanese":
+                text = "あ"
+            elif language == "Chinese":
+                text = "啊"
+            elif language == "Korean":
+                text = "아"
+            else:
+                text = "a"
+                
+            async for _ in self.generate_audio_stream(text, speed=1.0, language=language, gender=gender):
+                pass
+            print(f"[DEBUG] TTS warmup complete for {language} ({gender}).")
+        except Exception as e:
+            print(f"⚠️ Warmup error for {language}/{gender}: {e}")
 
     @staticmethod
     def _samples_to_wav(samples, sample_rate) -> bytes:
@@ -137,7 +152,10 @@ class TTSEngine:
                         return
                 except Exception as e:
                     print(f"⚠️ SBVITS2 error: {e}")
-                    raise e
+            
+            # Fallback
+            async for chunk in self._edge_tts_fallback(text, speed, language, gender):
+                yield chunk
             return
 
         # --- Chinese / Korean → CosyVoice2 ---
@@ -151,7 +169,10 @@ class TTSEngine:
                         return
                 except Exception as e:
                     print(f"⚠️ Primary engine failed: {e}")
-                    raise e
+            
+            # Fallback
+            async for chunk in self._edge_tts_fallback(text, speed, language, gender):
+                yield chunk
             return
 
         # --- Spanish / French → MeloTTS (female) or Edge TTS (male) ---
@@ -166,7 +187,6 @@ class TTSEngine:
                             return
                     except Exception as e:
                         print(f"⚠️ Primary engine failed: {e}")
-                        raise e
             # Fallback for male or if engine missing
             async for chunk in self._edge_tts_fallback(text, speed, language, gender):
                 yield chunk

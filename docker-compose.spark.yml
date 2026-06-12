@@ -31,27 +31,12 @@ services:
     environment:
       DATABASE_URL: postgresql://${POLYGLOT_DB_USER:-polyglot}:${POLYGLOT_DB_PASSWORD:?Set POLYGLOT_DB_PASSWORD in .env.spark}@db:5432/${POLYGLOT_DB_NAME:-polyglot}
       VLLM_URL: ${POLYGLOT_VLLM_URL:-http://host.docker.internal:8000/v1}
-      AI_MODEL: ${POLYGLOT_AI_MODEL:-qwen2.5-vl-7b}
+      AI_MODEL: ${POLYGLOT_AI_MODEL:-qwen2.5-7b-fp8}
       OPENAI_API_KEY: ${POLYGLOT_OPENAI_API_KEY:-token-nv}
     ports:
       - "${POLYGLOT_BACKEND_PORT:-18082}:8081"
     volumes:
-      - type: bind
-        source: ./kokoro-v1.0.onnx
-        target: /app/kokoro-v1.0.onnx
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ./voices.bin
-        target: /app/voices.bin
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ./models
-        target: /app/models
-        read_only: true
+      - hf_cache:/root/.cache/huggingface
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -101,4 +86,6 @@ networks:
 
 volumes:
   polyglot_spark_pgdata:
-    name: polyglot_spark_pgdata
+    name: aboveavg_polyglot_spark_pgdata
+  hf_cache:
+    name: aboveavg_polyglot_hf_cache

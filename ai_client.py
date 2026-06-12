@@ -14,7 +14,7 @@ class AIClient:
         else:
             api_key = os.environ.get("OPENAI_API_KEY", "dummy_key_for_vllm")
             self.client = AsyncOpenAI(base_url=vllm_url, api_key=api_key)
-            self.model = os.environ.get("AI_MODEL", model_override or "Qwen/Qwen2.5-7B-Instruct")
+            self.model = os.environ.get("AI_MODEL", model_override or "Qwen/Qwen3.5-9B")
 
         self.conversation_history = []
         self.scenario_history = []
@@ -38,8 +38,28 @@ class AIClient:
         self.scenario_history = []
 
     def _cleanup_text(self, text):
+        text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
+        text = re.sub(r'(?is)Here\'s a thinking process.*?</think>', '', text)
+        text = re.sub(r'(?is)Here\'s a thinking process.*?✅\s*', '', text)
+        text = re.sub(r'(?is)Here\'s a thinking process.*?(?=(?:こんにちは|承知|分かり|はい|いいえ|もちろん|そうですね|よろしく|初めまして|[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]))', '', text)
+        # Catch any lines starting with numbers, bullet points, or English reasoning phrases
         lines = text.split('\n')
-        cleaned = [l.strip() for l in lines if any(c.isalnum() for c in l)]
+        cleaned = []
+        in_reasoning = True
+        for l in lines:
+            if not l.strip():
+                continue
+            
+            # If we see Japanese characters, we've likely hit the actual reply
+            if re.search(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]', l):
+                in_reasoning = False
+            
+            if not in_reasoning:
+                cleaned.append(l.strip())
+            elif not re.match(r'^[\d\.\-\*]|Here\'s|Analyze|Identify|Determine|Draft|Final Check|Checking', l.strip()):
+                # Sometimes a line might not match our exact heuristic but is still part of the reply
+                cleaned.append(l.strip())
+
         reply = " ".join(cleaned)
         reply = re.sub(r'^[。・•\-\*]\s*', '', reply)
         return reply.strip()
@@ -51,6 +71,7 @@ class AIClient:
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
+            extra_body={"chat_template_kwargs": {"enable_thinking": False}},
         )
         return response.choices[0].message.content.strip()
 
@@ -63,6 +84,7 @@ class AIClient:
                 temperature=temperature,
                 max_tokens=max_tokens,
                 stream=True,
+                extra_body={"chat_template_kwargs": {"enable_thinking": False}},
             )
 
             full_text = ""
@@ -76,10 +98,7 @@ class AIClient:
                     full_text += token
 
                     reply_part = full_text
-                        
-                    safe_reply = reply_part
-                    safe_reply = re.sub(r'\[GOAL_REACHED\]', '', safe_reply, flags=re.IGNORECASE)
-                    safe_reply = re.sub(r'\[PERFECT\]', '', safe_reply, flags=re.IGNORECASE)
+                    safe_reply = self._cleanup_text(reply_part)
                     
                     last_bracket = safe_reply.rfind("[")
                     if last_bracket != -1 and safe_reply.find("]", last_bracket) == -1:
@@ -159,7 +178,7 @@ class AIClient:
 
     # ---------- Chat ----------
 
-    async def get_reply_stream(self, user_text, target_language, difficulty="Intermediate", enable_grammar=True, enable_word_bank=True, user_name=None):
+    async def get_reply_stream(self, user_text, target_language, difficulty="Intermediate", enable_grammar=True, enable_word_bank=True, user_name=None, notebook_words=None):
         # Detect and track formality register
         # Reset register if language changed
         last_lang = getattr(self, '_last_language', None)
@@ -173,75 +192,75 @@ class AIClient:
 
         register = self.current_register
 
-        system_prompt = f"""ROLE: Human text-message language partner. NOT an AI assistant. Brief, natural, conversational.
+        # --- Build system prompt ---
+        lang_rules = {
+            "Japanese": {
+                "script": "Japanese script only (漢字・ひらがな・カタカナ). No Romaji. No Chinese Hanzi (use 聞く not 听).",
+                "CASUAL": "Reply in タメ口 (plain form). No です/ます/ください/でしょうか/ございます. Use だ/だよ/よ/ね/かな/じゃん and plain verbs.",
+                "FORMAL": "Reply in 丁寧語 (です/ます form). Polite but natural, not stiff.",
+            },
+            "Korean": {
+                "script": "Hangul only. No English. No romanization.",
+                "CASUAL": "Reply in 반말. No 요/세요/습니다/ㅂ니다. Use 해/어/아/야/지/는데/거든/잖아.",
+                "FORMAL": "Reply in 해요체 (요 endings). Polite but warm.",
+            },
+            "Chinese": {
+                "script": "Simplified Chinese only. No Pinyin. No English. No Japanese characters.",
+                "CASUAL": "Use 你 (casual). Do not use 您.",
+                "FORMAL": "Use 您 (polite).",
+            },
+        }
 
-RULES:
-1. Max 30 words, 1-2 sentences. No lists or essays.
-2. FORMALITY: You MUST use the register indicated by [REGISTER: ...] in the user's message. This is NON-NEGOTIABLE.
-3. ABSOLUTE LANGUAGE RULE: Speak 100% ONLY in {target_language}. ZERO English words. ZERO Romaji. ZERO Pinyin. Write ONLY in the native script of {target_language}. Even a single English word is a failure.
-4. Do NOT ask the user for their name.
-5. No violent/explicit/R-18 content.
-"""
-        if target_language == "Japanese":
-            if register == "CASUAL":
-                system_prompt += """REGISTER IS CASUAL (タメ口):
-You MUST reply in タメ口. This means:
-- FORBIDDEN words/endings: です, ます, ください, でしょうか, ございます, ましょう
-- USE: plain verbs (ある, いる, する, 行く, 思う), だ/だよ/だね/よ/ね/かな/じゃん
-- 聞いて NOT 聞いてください, いい NOT いいです, ある NOT あります, だよ NOT ですよ
-- Example reply style: もちろん！何でも聞いてよ。 / いいじゃん！どんな犬が好き？
+        lang = lang_rules.get(target_language, {
+            "script": f"Native {target_language} script only. No English. No transliterations.",
+            "CASUAL": "Use casual/informal register.",
+            "FORMAL": "Use polite/formal register.",
+        })
 
-No Romaji. No Chinese Hanzi. Japanese Kanji only (聞く not 听). Katakana for loanwords."""
-            else:
-                system_prompt += """REGISTER IS FORMAL (丁寧語):
-Reply using です/ます form. Be polite but natural, not overly stiff.
-No Romaji. No Chinese Hanzi. Japanese Kanji only (聞く not 听). Katakana for loanwords."""
-        elif target_language == "Korean":
-            if register == "CASUAL":
-                system_prompt += """REGISTER IS CASUAL (반말):
-You MUST reply in 반말. This means:
-- FORBIDDEN endings: 요, 세요, 습니다, ㅂ니다, 드릴까요, 하시
-- USE: 해/해?/어/아/야/지/는데/거든/잖아
-- 도와드릴까요 is WRONG, use 도와줄까 or 뭐 하고 있어
-- Example reply style: 안녕! 뭐 하고 있어? / 별거 없어~ 너는?
+        system_prompt = f"""You are a native {target_language} speaker texting with a friend. This is a casual chat, not a lesson.
 
-Write in Hangul ONLY. ABSOLUTELY NO English words."""
-            else:
-                system_prompt += """REGISTER IS FORMAL (존댓말):
-Reply using 해요체 (요 endings). Be polite but warm.
-Write in Hangul ONLY. ABSOLUTELY NO English words."""
-        elif target_language == "Chinese":
-            system_prompt += """CHINESE RULES:
-- Write in Simplified Chinese characters ONLY. No Pinyin. No English. No Japanese characters."""
-            if register == "CASUAL":
-                system_prompt += "\n- Use 你 (casual). Do NOT use 您."
-            else:
-                system_prompt += "\n- Use 您 (polite)."
-        else:
-            system_prompt += f"""\n{target_language} FORMALITY:
-- Write only in {target_language} native script. No English. No transliterations."""
-            if register == "CASUAL":
-                system_prompt += "\n- Use casual/informal register."
-            else:
-                system_prompt += "\n- Use polite/formal register."
+How to reply:
+- Respond to what the user said. Acknowledge their message before adding anything new.
+- Keep it short: 1-2 sentences, under 30 words. Text like a real person, not a textbook.
+- Mix it up: react, agree, joke, share a thought, or ask something — but don't interrogate. Not every message needs a question.
+- If the user is brief, be brief back. Match their energy.
+- Avoid controversial, politically sensitive, or heavy topics (war, religion, politics, tragedy). Especially avoid topics that are culturally sensitive for {target_language} speakers. Keep things light and friendly.
+
+Register: {register} — {lang[register]}
+Script: {lang['script']}
+Write ONLY in {target_language}. Zero English words in your reply."""
 
         diff_rules = config.DIFFICULTY_PROMPT_MODIFIERS.get(difficulty, config.DIFFICULTY_PROMPT_MODIFIERS["Intermediate"])
-        system_prompt += f"\n\n[DIFFICULTY: {difficulty}]\n{diff_rules}"
+        system_prompt += f"\nDifficulty: {difficulty}. {diff_rules}"
 
         if user_name:
-            system_prompt += f"\n\n[USER INFO]\nThe user's name is: {user_name}\nCRITICAL: Output this name EXACTLY as written above — same characters, same script, no changes. Do NOT romanize it, do NOT transliterate it, do NOT convert it to another writing system, do NOT re-spell it. Write \"{user_name}\" verbatim every time you address the user. Use the name naturally but sparingly. Do NOT ask the user what their name is."
+            system_prompt += f"\nThe user's name is \"{user_name}\" — write it exactly as shown when you use it. Only use it rarely (every few messages). Don't ask their name."
 
         if self.conversation_memory:
-            system_prompt += f"\n\n[PREVIOUS CONTEXT SUMMARY]\n{self.conversation_memory}\n"
+            system_prompt += f"\n\n[Previous context]\n{self.conversation_memory}"
 
-        system_prompt += "\n\nCRITICAL OUTPUT FORMATTING:\nOutput ONLY your conversational reply, without any prefixes, tags, or markdown blocks."
+        # Anti-circular: when conversation is long enough, nudge towards notebook topics
+        if len(self.conversation_history) >= 8:
+            system_prompt += "\n\nThe conversation may be getting repetitive. If it feels circular (e.g. just agreeing or complimenting back and forth), naturally steer to a new topic."
+            if notebook_words:
+                topics_str = ", ".join(notebook_words[:15])
+                system_prompt += f" The user is studying these words: [{topics_str}]. Try to bring up a topic related to these interests."
 
         messages = [{"role": "system", "content": system_prompt}]
         messages.extend(self.conversation_history)
-        messages.append({"role": "user", "content": f"[REGISTER: {register}] {user_text}"})
+        messages.append({"role": "user", "content": user_text})
+
+        # --- TEMP DEBUG ---
+        print(f"[DEBUG] User said: {user_text}", flush=True)
+        print(f"[DEBUG] Register: {register} | History length: {len(self.conversation_history)}", flush=True)
+        for i, m in enumerate(messages):
+            role = m['role']
+            content = m['content'][:120] if role == 'system' else m['content']
+            print(f"[DEBUG]   msg[{i}] {role}: {content}", flush=True)
+        # --- END TEMP DEBUG ---
 
         full = ""
-        async for delta, sentence, full_reply, ok, done, extras in self._stream_sentences(messages):
+        async for delta, sentence, full_reply, ok, done, extras in self._stream_sentences(messages, temperature=0.5):
             full = full_reply
             
             if done and ok:
@@ -287,7 +306,7 @@ RULES:
         system_prompt += """
 
 CRITICAL OUTPUT FORMATTING:
-Output ONLY your conversational reply, without any prefixes, tags, or markdown blocks."""
+Output ONLY your conversational reply. DO NOT output any thinking process, analysis, meta-commentary, or prefixes like 'Here is a thinking process' or 'Analyze User Input'. Just output the raw conversational reply text directly, with no surrounding quotes or markdown."""
 
         messages = [{"role": "system", "content": system_prompt}]
         messages.extend(self.scenario_history)
@@ -412,12 +431,13 @@ User: "안녕하세요" → PERFECT"""
             return self.word_bank_cache[cache_key], True
 
         count = 15 if include_decoys else 10
-        sp = f"""You are a helpful language tutor. Based on this text from the AI: '{reply_text}'
+        sp = f"""You are a helpful language tutor.
 Provide exactly {count} useful vocabulary words in {target_language} (NO CHINESE HANZI, NO ENGLISH) that the user could use to reply.
 Mix nouns, verbs, particles, and punctuation. Do NOT use Romaji/Pinyin. Output ONLY the {target_language} comma-separated list, nothing else."""
+        user_msg = f"Based on this text from the AI: '{reply_text}'"
         try:
             raw = await self._complete(
-                [{"role": "system", "content": sp}], temperature=0.5, max_tokens=100,
+                [{"role": "system", "content": sp}, {"role": "user", "content": user_msg}], temperature=0.5, max_tokens=100,
             )
             if target_language == "Japanese":
                 tokens = re.split(r'[,\s、]+', raw)
@@ -454,18 +474,18 @@ Mix nouns, verbs, particles, and punctuation. Do NOT use Romaji/Pinyin. Output O
             lang_script_rule = f"Use only native {target_language} script for {target_language} words."
 
         sp = f"""You are a strict {target_language} grammar checker.
-Analyze the following sentence from a language learner: "{user_text}"
-
 IMPORTANT: Casual/informal speech is NOT a grammar error. Greetings, exclamations, and sentence fragments that are natural in conversation are CORRECT. Only flag real structural grammar errors (wrong particles, incorrect conjugation, impossible word order).
 
 You MUST respond in this exact format:
 Grammar Correct: [YES or NO]
 Correction: [The corrected sentence, if NO. If YES, leave blank]
 Explanation: [Write your explanation ENTIRELY IN ENGLISH. {lang_script_rule} All other words MUST be English. No Romaji. No Pinyin.]"""
+        user_msg = f"Analyze the following sentence from a language learner: \"{user_text}\""
         try:
             raw = await self._complete(
                 messages=[
-                    {"role": "system", "content": sp}
+                    {"role": "system", "content": sp},
+                    {"role": "user", "content": user_msg}
                 ],
                 temperature=0.1,
                 max_tokens=200

@@ -7,6 +7,18 @@ import ErrorBoundary from './ErrorBoundary';
 function App() {
   const [user, setUser] = useState(null);
   const [selectedLanguage, setSelectedLanguage] = useState(null);
+  const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('polyglot_theme') === 'dark');
+
+  // Apply dark class to html tag
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('polyglot_theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('polyglot_theme', 'light');
+    }
+  }, [isDarkMode]);
 
   if (!user) {
     return (
@@ -34,6 +46,8 @@ function App() {
         initialLanguage={selectedLanguage}
         onLogout={() => { setUser(null); setSelectedLanguage(null); }}
         setUser={setUser}
+        isDarkMode={isDarkMode}
+        setIsDarkMode={setIsDarkMode}
       />
     </ErrorBoundary>
   );

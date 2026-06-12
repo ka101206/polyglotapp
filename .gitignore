@@ -13,3 +13,5 @@ asset/
 *.safetensors
 _deprecated/
 model_assets/
+venv/
+.venv/

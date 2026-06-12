@@ -50,45 +50,45 @@ export default function Auth({ onLogin }) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4">
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="max-w-md w-full bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 p-8 rounded-3xl shadow-2xl"
+        className="max-w-md w-full bg-slate-200 dark:bg-slate-800/50 backdrop-blur-xl border border-slate-300 dark:border-slate-700/50 p-8 rounded-3xl shadow-2xl"
       >
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-500/20 text-blue-400 mb-4">
             {isLogin ? <LogIn size={32} /> : <UserPlus size={32} />}
           </div>
-          <h2 className="text-3xl font-bold text-white tracking-tight">
+          <h2 className="text-3xl font-bold text-black dark:text-white tracking-tight">
             {isLogin ? 'Welcome back' : 'Create account'}
           </h2>
-          <p className="text-slate-400 mt-2">
+          <p className="text-slate-600 dark:text-slate-400 mt-2">
             {isLogin ? 'Enter your details to access your dashboard' : 'Sign up to start mastering languages'}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Username</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Username</label>
             <input
               type="text"
               required
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-black dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
               placeholder="Enter your username"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Password</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Password</label>
             <input
               type="password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-black dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
               placeholder="••••••••"
             />
           </div>
@@ -102,7 +102,7 @@ export default function Auth({ onLogin }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-semibold py-3 px-4 rounded-xl shadow-lg shadow-blue-500/30 transform transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-black dark:text-white font-semibold py-3 px-4 rounded-xl shadow-lg shadow-blue-500/30 transform transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Sign Up')}
           </button>
@@ -114,7 +114,7 @@ export default function Auth({ onLogin }) {
               setIsLogin(!isLogin);
               setError('');
             }}
-            className="text-slate-400 hover:text-white text-sm transition-colors"
+            className="text-slate-600 dark:text-slate-400 hover:text-black dark:text-white text-sm transition-colors"
           >
             {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
           </button>

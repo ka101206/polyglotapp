@@ -211,6 +211,19 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
                 await websocket.send_json({"type": "tutor_reply", "content": display})
                 continue
 
+            # --- Warmup TTS ---
+            if msg_type == "warmup_tts":
+                req_lang = payload.get("language", "Japanese")
+                req_gender = payload.get("gender", "female")
+                try:
+                    await websocket.send_json({"type": "tts_warmup_start"})
+                    await tts_engine.warmup(req_lang, req_gender)
+                    await websocket.send_json({"type": "tts_warmup_done"})
+                except Exception as e:
+                    print(f"[ERROR] Warmup failed: {e}")
+                    await websocket.send_json({"type": "tts_warmup_done"})
+                continue
+
             # --- Repeat Audio ---
             if msg_type == "repeat":
                 text_to_repeat = payload.get("text", "")
@@ -288,7 +301,14 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
                 scenario_dict = config.SCENARIOS.get(scenario)
                 generator = ai_client.get_scenario_reply_stream(user_text, language, difficulty, scenario_dict, enable_grammar, enable_word_bank, user_name=user_name)
             else:
-                generator = ai_client.get_reply_stream(user_text, language, difficulty, enable_grammar, enable_word_bank, user_name=user_name)
+                # Fetch notebook words for topic steering
+                notebook_words = []
+                try:
+                    vocab_entries = db.query(Vocabulary).filter(Vocabulary.user_id == user_id).order_by(Vocabulary.first_seen_at.desc()).limit(30).all()
+                    notebook_words = [v.word for v in vocab_entries if v.word]
+                except Exception:
+                    pass
+                generator = ai_client.get_reply_stream(user_text, language, difficulty, enable_grammar, enable_word_bank, user_name=user_name, notebook_words=notebook_words)
 
             # --- Stream LLM → UI + Audio ---
             use_furigana = needs_furigana(reading_mode)

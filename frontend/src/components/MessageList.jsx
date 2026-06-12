@@ -16,6 +16,7 @@ const MessageList = memo(function MessageList({
     const selection = window.getSelection().toString().trim();
     if (selection) {
       setSelectionToolbar({
+        word: selection,
         text: selection,
         x: e.clientX,
         y: e.clientY - 40
@@ -35,7 +36,7 @@ const MessageList = memo(function MessageList({
     if (m.role === 'system') {
       return (
         <div key={`system-${keyStr}`} className="flex justify-center my-3">
-          <div className="bg-slate-800/60 border border-slate-700/50 text-slate-400 text-xs font-medium px-4 py-1.5 rounded-full">
+          <div className="bg-slate-200 dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700/50 text-slate-600 dark:text-slate-400 text-xs font-medium px-4 py-1.5 rounded-full">
             {m.content}
           </div>
         </div>
@@ -62,15 +63,15 @@ const MessageList = memo(function MessageList({
         );
       } else {
         return (
-          <details key={`scenario-${keyStr}`} className="bg-slate-800/40 border border-slate-700/50 rounded-2xl overflow-hidden group my-2">
-            <summary className="p-4 font-bold text-slate-300 cursor-pointer hover:bg-slate-700/50 transition-colors flex items-center justify-between outline-none">
+          <details key={`scenario-${keyStr}`} className="bg-slate-200 dark:bg-slate-800/40 border border-slate-300 dark:border-slate-700/50 rounded-2xl overflow-hidden group my-2">
+            <summary className="p-4 font-bold text-slate-700 dark:text-slate-300 cursor-pointer hover:bg-slate-300 dark:bg-slate-700/50 transition-colors flex items-center justify-between outline-none">
               <span className="flex items-center gap-3">
                 <div className="w-6 h-6 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center text-xs border border-green-500/30">✓</div>
                 Completed: {m.id}
               </span>
-              <span className="text-xs font-semibold text-slate-500 bg-slate-800/80 px-2 py-1.5 rounded-lg border border-slate-700">{m.messages.length} messages</span>
+              <span className="text-xs font-semibold text-slate-500 bg-slate-200 dark:bg-slate-800/80 px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700">{m.messages.length} messages</span>
             </summary>
-            <div className="p-4 space-y-2 bg-slate-900/60 border-t border-slate-700/50">
+            <div className="p-4 space-y-2 bg-slate-50 dark:bg-slate-900/60 border-t border-slate-300 dark:border-slate-700/50">
                {m.messages.map((sMsg, j) => renderMessage(sMsg, `${keyStr}-${j}`))}
             </div>
           </details>
@@ -83,15 +84,15 @@ const MessageList = memo(function MessageList({
         key={keyStr}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex gap-3 w-full group hover:bg-slate-800/30 py-2 px-3 rounded-2xl transition-colors"
+        className="flex gap-3 w-full group hover:bg-slate-200 dark:bg-slate-800/30 py-2 px-3 rounded-2xl transition-colors"
       >
         <div className="shrink-0 mt-1">
           {m.role === 'user' ? (
-            <div className={`w-8 h-8 rounded-full bg-gradient-to-tr ${user?.gradientClass || 'from-blue-500 to-indigo-500'} flex items-center justify-center text-white shadow-lg shadow-blue-500/20 shrink-0 overflow-hidden`}>
+            <div className={`w-8 h-8 rounded-full bg-gradient-to-tr ${user?.gradientClass || 'from-blue-500 to-indigo-500'} flex items-center justify-center text-black dark:text-white shadow-lg shadow-blue-500/20 shrink-0 overflow-hidden`}>
               <User className="w-5 h-5 mt-1 opacity-90" />
             </div>
           ) : (
-            <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 shrink-0 overflow-hidden">
+            <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-400 shrink-0 overflow-hidden">
               <User className="w-5 h-5 mt-1 opacity-80" />
             </div>
           )}
@@ -99,7 +100,7 @@ const MessageList = memo(function MessageList({
         
         <div className="flex-1 relative space-y-1">
           <div className="flex items-center gap-3">
-             <span className="font-semibold text-slate-200 text-sm">{m.role === 'user' ? (user?.nickname || user?.username || 'You') : 'Polyglot AI'}</span>
+             <span className="font-semibold text-slate-800 dark:text-slate-200 text-sm">{m.role === 'user' ? (user?.nickname || user?.username || 'You') : 'Polyglot AI'}</span>
              {m.role === 'user' && ((m.grammar && m.grammar.replace(/[^a-zA-Z]/g, '').toUpperCase() !== 'PERFECT') || m.pronunciation) && (
                <button 
                  onClick={() => setInlineFeedbackPopup(m)}
@@ -111,7 +112,7 @@ const MessageList = memo(function MessageList({
              )}
           </div>
           
-          <div className="text-[17px] leading-relaxed text-slate-300 font-medium">
+          <div className="text-[17px] leading-relaxed text-slate-700 dark:text-slate-300 font-medium">
             {m.role === 'ai' && (m.content.includes('<ruby>') || (language === 'Japanese' && readingMode === 'ふりがな') || (language === 'Chinese' && readingMode === '拼音')) ? (
                <div dangerouslySetInnerHTML={{ __html: m.content }} />
             ) : (

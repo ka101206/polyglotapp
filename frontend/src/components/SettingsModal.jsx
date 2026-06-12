@@ -22,7 +22,9 @@ export default function SettingsModal({
   enableWordBank,
   setEnableWordBank,
   voiceGender,
-  setVoiceGender
+  setVoiceGender,
+  isDarkMode,
+  setIsDarkMode
 }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [newUsername, setNewUsername] = useState('');
@@ -101,20 +103,20 @@ export default function SettingsModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl flex flex-col">
-        <div className="flex items-center justify-between p-6 border-b border-slate-800">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+      <div className="bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl w-full max-w-md shadow-2xl flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-800">
+          <h2 className="text-xl font-bold text-black dark:text-white flex items-center gap-2">
             <Settings className="w-5 h-5 text-blue-400" />
             Settings
           </h2>
-          <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-white">
+          <button onClick={() => setShowSettings(false)} className="text-slate-600 dark:text-slate-400 hover:text-black dark:text-white">
             <X className="w-6 h-6" />
           </button>
         </div>
         <div className="p-6 overflow-y-auto max-h-[70vh] space-y-6">
           <div className="space-y-3">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Target Language</label>
-            <select value={language} onChange={(e) => setLanguage(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 outline-none focus:border-blue-500 transition-colors">
+            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Target Language</label>
+            <select value={language} onChange={(e) => setLanguage(e.target.value)} className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-blue-500 transition-colors">
               <option value="Japanese">Japanese</option>
               <option value="Spanish">Spanish</option>
               <option value="French">French</option>
@@ -125,8 +127,8 @@ export default function SettingsModal({
           </div>
           
           <div className="space-y-3">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Difficulty</label>
-            <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 outline-none focus:border-blue-500 transition-colors">
+            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Difficulty</label>
+            <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-blue-500 transition-colors">
               {language === 'Japanese' ? (
                 <>
                   <option value="JLPT N5 (Beginner)">JLPT N5 (Beginner)</option>
@@ -165,8 +167,8 @@ export default function SettingsModal({
 
           {language === 'Japanese' && (
             <div className="space-y-3">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Reading Help</label>
-              <select value={readingMode} onChange={(e) => setReadingMode(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 outline-none focus:border-blue-500 transition-colors">
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Reading Help</label>
+              <select value={readingMode} onChange={(e) => setReadingMode(e.target.value)} className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-blue-500 transition-colors">
                 <option value="なし">None (Kanji)</option>
                 <option value="ふりがな">Furigana</option>
                 <option value="かなのみ">Kana Only</option>
@@ -176,8 +178,8 @@ export default function SettingsModal({
 
           {language === 'Chinese' && (
             <div className="space-y-3">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Reading Help</label>
-              <select value={readingMode} onChange={(e) => setReadingMode(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 outline-none focus:border-blue-500 transition-colors">
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Reading Help</label>
+              <select value={readingMode} onChange={(e) => setReadingMode(e.target.value)} className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-blue-500 transition-colors">
                 <option value="なし">None (Hanzi)</option>
                 <option value="拼音">Pinyin</option>
               </select>
@@ -186,40 +188,48 @@ export default function SettingsModal({
 
           <div className="space-y-3">
             <div className="flex justify-between items-center">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Mic Sensitivity</label>
-              <span className="text-xs font-medium text-slate-300">{micSensitivity}</span>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Mic Sensitivity</label>
+              <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{micSensitivity}</span>
             </div>
             <input type="range" min="0" max="100" step="1" value={micSensitivity} onChange={(e) => setMicSensitivity(parseInt(e.target.value))} className="w-full accent-blue-500" />
           </div>
 
           <div className="space-y-3">
             <div className="flex justify-between items-center">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Silence Timeout</label>
-              <span className="text-xs font-medium text-slate-300">{silenceTimeout.toFixed(1)}s</span>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Silence Timeout</label>
+              <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{silenceTimeout.toFixed(1)}s</span>
             </div>
             <input type="range" min="1.0" max="10.0" step="0.5" value={silenceTimeout} onChange={(e) => setSilenceTimeout(parseFloat(e.target.value))} className="w-full accent-blue-500" />
           </div>
 
-          <div className="pt-4 border-t border-slate-800 space-y-4">
+          <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-4">
             <label className="flex items-center justify-between cursor-pointer">
-              <span className="text-sm font-medium text-slate-300">Enable Grammar Tutor</span>
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Enable Grammar Tutor</span>
               <div className="relative">
                 <input type="checkbox" className="sr-only peer" checked={enableGrammar} onChange={(e) => setEnableGrammar(e.target.checked)} />
-                <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+                <div className="w-11 h-6 bg-slate-300 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
               </div>
             </label>
 
             <label className="flex items-center justify-between cursor-pointer">
-              <span className="text-sm font-medium text-slate-300">Enable Word Bank</span>
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Enable Word Bank</span>
               <div className="relative">
                 <input type="checkbox" className="sr-only peer" checked={enableWordBank} onChange={(e) => setEnableWordBank(e.target.checked)} />
-                <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+                <div className="w-11 h-6 bg-slate-300 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+              </div>
+            </label>
+
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Dark Mode</span>
+              <div className="relative">
+                <input type="checkbox" className="sr-only peer" checked={isDarkMode} onChange={(e) => setIsDarkMode(e.target.checked)} />
+                <div className="w-11 h-6 bg-slate-300 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
               </div>
             </label>
           </div>
 
-          <div className="pt-4 border-t border-slate-800 space-y-3">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Voice</label>
+          <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
+            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Voice</label>
             <div className="flex gap-2">
               <button
                 type="button"
@@ -227,7 +237,7 @@ export default function SettingsModal({
                 className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
                   voiceGender === 'female'
                     ? 'bg-pink-500/20 border border-pink-500 text-pink-300'
-                    : 'bg-slate-900/50 border border-slate-700 text-slate-400 hover:border-slate-500'
+                    : 'bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-500'
                 }`}
               >
                 Female
@@ -238,7 +248,7 @@ export default function SettingsModal({
                 className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
                   voiceGender === 'male'
                     ? 'bg-blue-500/20 border border-blue-500 text-blue-300'
-                    : 'bg-slate-900/50 border border-slate-700 text-slate-400 hover:border-slate-500'
+                    : 'bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-500'
                 }`}
               >
                 Male
@@ -246,21 +256,21 @@ export default function SettingsModal({
             </div>
           </div>
 
-          <div className="pt-4 border-t border-slate-800 space-y-4">
+          <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-4">
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Change Username</label>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Change Username</label>
               <div className="flex gap-2">
                 <input 
                   type="text" 
                   placeholder={user?.username || "New username"}
                   value={newUsername}
                   onChange={(e) => setNewUsername(e.target.value)}
-                  className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                  className="flex-1 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-2 text-sm text-black dark:text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
                 />
                 <button 
                   onClick={handleUpdateUsername}
                   disabled={!newUsername.trim() || isUpdatingUsername}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 disabled:text-white/50 text-white rounded-xl text-sm font-medium transition-colors"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 disabled:text-black dark:text-white/50 text-black dark:text-white rounded-xl text-sm font-medium transition-colors"
                 >
                   {isUpdatingUsername ? "Updating..." : "Update"}
                 </button>
@@ -268,19 +278,19 @@ export default function SettingsModal({
             </div>
 
             <div className="space-y-2 pt-2">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Nickname</label>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Nickname</label>
               <div className="flex gap-2">
                 <input 
                   type="text" 
                   placeholder={user?.nickname || "Nickname"}
                   value={newNickname}
                   onChange={(e) => setNewNickname(e.target.value)}
-                  className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                  className="flex-1 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-2 text-sm text-black dark:text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
                 />
                 <button 
                   onClick={handleUpdateNickname}
                   disabled={!newNickname.trim() || isUpdatingNickname}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-600/50 disabled:text-white/50 text-white rounded-xl text-sm font-medium transition-colors"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-600/50 disabled:text-black dark:text-white/50 text-black dark:text-white rounded-xl text-sm font-medium transition-colors"
                 >
                   {isUpdatingNickname ? "Saving..." : "Save"}
                 </button>
@@ -288,7 +298,7 @@ export default function SettingsModal({
             </div>
           </div>
 
-          <div className="pt-4 border-t border-slate-800 space-y-4">
+          <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-4">
             {!showDeleteConfirm ? (
               <button 
                 onClick={() => setShowDeleteConfirm(true)}
@@ -302,13 +312,13 @@ export default function SettingsModal({
                 <div className="flex gap-3">
                   <button 
                     onClick={() => setShowDeleteConfirm(false)}
-                    className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-medium transition-colors"
+                    className="flex-1 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors"
                   >
                     Cancel
                   </button>
                   <button 
                     onClick={handleDeleteAccount}
-                    className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors"
+                    className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-black dark:text-white rounded-lg font-medium transition-colors"
                   >
                     Yes, Delete
                   </button>
