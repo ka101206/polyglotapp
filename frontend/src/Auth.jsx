@@ -15,7 +15,7 @@ export default function Auth({ onLogin }) {
     setLoading(true);
 
     const endpoint = isLogin ? '/auth/login' : '/auth/register';
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8081';
+    const apiUrl = '';
 
     try {
       const response = await fetch(`${apiUrl}${endpoint}`, {

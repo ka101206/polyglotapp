@@ -194,6 +194,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
     try:
         while True:
             data = await websocket.receive_text()
+            print(f"[DEBUG] Received WebSocket data: {data}", flush=True)
             payload = json.loads(data)
             msg_type = payload.get("type", "chat")
 

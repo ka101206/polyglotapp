@@ -15,3 +15,5 @@ _deprecated/
 model_assets/
 venv/
 .venv/
+cloudflared
+cloudflared.log

@@ -8,7 +8,7 @@ export default function AnalyticsDashboard({ user, onClose }) {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8081';
+        const apiUrl = '';
         const res = await fetch(`${apiUrl}/api/analytics/${user.user_id}`);
         const data = await res.json();
         setStats(data);

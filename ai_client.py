@@ -241,11 +241,11 @@ Rules:
                 system_prompt += f"\n\n[Previous context]\n{self.conversation_memory}"
 
             # Anti-circular: when conversation is long enough, nudge towards notebook topics
-            if len(self.conversation_history) >= 8:
-                system_prompt += "\n\nThe conversation may be getting repetitive. If it feels circular (e.g. just agreeing or complimenting back and forth), naturally steer to a new topic."
+            if len(self.conversation_history) >= 6:
+                system_prompt += "\n\nCRITICAL INSTRUCTION: Analyze the recent conversation. If the user is just giving short 1-word answers (like 'OK', 'うん') or the conversation is stuck in a repetitive loop (e.g. endlessly agreeing or 'getting ready'), you MUST forcefully change the subject to something entirely new right now. Ask a completely unrelated question to force the conversation forward."
                 if notebook_words:
                     topics_str = ", ".join(notebook_words[:15])
-                    system_prompt += f" The user is studying these words: [{topics_str}]. Try to bring up a topic related to these interests."
+                    system_prompt += f" For example, the user is interested in these topics: [{topics_str}]. Try asking about one of them!"
 
         messages = [{"role": "system", "content": system_prompt}]
         messages.extend(self.conversation_history)
@@ -343,7 +343,7 @@ RULES:
         system_prompt += """
 
 CRITICAL OUTPUT FORMATTING:
-Output ONLY your conversational reply. DO NOT output any thinking process, analysis, meta-commentary, or prefixes like 'Here is a thinking process' or 'Analyze User Input'. Just output the raw conversational reply text directly, with no surrounding quotes or markdown."""
+Output ONLY your conversational reply (and the [GOAL_REACHED] tag if the goal is met). DO NOT output any thinking process, analysis, meta-commentary, or prefixes like 'Here is a thinking process'. Just output the raw conversational reply text directly."""
 
         messages = [{"role": "system", "content": system_prompt}]
         messages.extend(self.scenario_history)
@@ -514,16 +514,17 @@ Mix nouns, verbs, particles, and punctuation. Do NOT use Romaji/Pinyin. Output O
         else:
             lang_script_rule = f"Use only native {target_language} script for {target_language} words."
 
-        sp = f"""Role: Strict {target_language} grammar checker.
+        sp = f"""Role: Strict {target_language} grammar checker for a CONVERSATION.
 Rules:
-- Casual speech/fragments = CORRECT.
-- Context matters: Omitted subjects/particles naturally dropped in conversation = CORRECT.
-- Flag ONLY structural errors (wrong conjugation, broken syntax).
+- Casual speech, short responses, and sentence fragments are perfectly CORRECT in a conversation.
+- If the sentence makes sense in the provided Context, DO NOT flag it as an error.
+- Only flag severe structural errors (wrong conjugation, broken syntax).
+- The Explanation MUST be written entirely in English.
 
 Format:
 Grammar Correct: YES/NO
 Correction: [if NO]
-Explanation: [in English. {lang_script_rule}]"""
+Explanation: [Entirely in English. {lang_script_rule}]"""
         user_msg = ""
         if context_history:
             user_msg += f"Context:\n{context_history}\n\n"

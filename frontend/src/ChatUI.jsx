@@ -20,8 +20,14 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
   const [replaySpeed, setReplaySpeed] = useState(0.8);
   const [sidebarTab, setSidebarTab] = useState('notebook');
   const [notebook, setNotebook] = useState([]);
-  const [micSensitivity, setMicSensitivity] = useState(50);
-  const [silenceTimeout, setSilenceTimeout] = useState(2.5);
+  const [micSensitivity, setMicSensitivity] = useState(() => {
+    const saved = localStorage.getItem('polyglot_mic_sensitivity');
+    return saved !== null ? parseInt(saved, 10) : 50;
+  });
+  const [silenceTimeout, setSilenceTimeout] = useState(() => {
+    const saved = localStorage.getItem('polyglot_silence_timeout');
+    return saved !== null ? parseFloat(saved) : 2.5;
+  });
   const [enableGrammar, setEnableGrammar] = useState(() => localStorage.getItem('polyglot_enable_grammar') !== 'false');
   const [enableWordBank, setEnableWordBank] = useState(() => localStorage.getItem('polyglot_enable_word_bank') !== 'false');
   const [voiceGender, setVoiceGender] = useState(() => localStorage.getItem('polyglot_voice_gender') || 'female');
@@ -37,6 +43,7 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
   const [input, setInput] = useState('');
   const [wordBankPool, setWordBankPool] = useState([]);
   const [assembledWords, setAssembledWords] = useState([]);
+  const [isConversationMode, setIsConversationMode] = useState(false);
   
   const messagesEndRef = useRef(null);
   const langCode = language === 'Japanese' ? 'ja' : language === 'Chinese' ? 'zh-CN' : language === 'Korean' ? 'ko' : language === 'Spanish' ? 'es' : language === 'French' ? 'fr' : language === 'Italian' ? 'it' : 'en';
@@ -88,7 +95,7 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
   useEffect(() => {
     if (difficulty) {
       localStorage.setItem(`polyglot_difficulty_${language}`, difficulty);
-      if (!difficulty.includes("Beginner") && !difficulty.includes("Elementary")) {
+      if (!difficulty.includes("Beginner") && !difficulty.includes("Elementary") && !difficulty.includes("Intermediate")) {
         setWordBankPool([]);
         setAssembledWords([]);
       }
@@ -99,7 +106,7 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
 
   const fetchNotebook = async () => {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8081';
+      const apiUrl = '';
       const res = await fetch(`${apiUrl}/api/notebook?user_id=${user.user_id}`);
       const data = await res.json();
       setNotebook(data);
@@ -110,7 +117,7 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
 
   const saveToNotebook = async (word, definition, context) => {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8081';
+      const apiUrl = '';
       await fetch(`${apiUrl}/api/notebook`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -125,7 +132,7 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
 
   const deleteFromNotebook = async (id) => {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8081';
+      const apiUrl = '';
       await fetch(`${apiUrl}/api/notebook/${id}`, { method: 'DELETE' });
       fetchNotebook();
     } catch (e) {
@@ -136,6 +143,8 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
   useEffect(() => {
     fetchNotebook();
   }, [user.user_id]);
+
+  const effectiveEnableWordBank = enableWordBank && (difficulty.includes("Beginner") || difficulty.includes("Elementary") || difficulty.includes("Intermediate"));
 
   const {
     messages,
@@ -150,7 +159,7 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
     sendTutorMessage,
     triggerScenario,
     isTTSWarmingUp
-  } = useChatWebSocket(user.user_id, language, difficulty, readingMode, ttsSpeed, enableGrammar, enableWordBank, voiceGender, tokenMode, (words) => {
+  } = useChatWebSocket(user.user_id, language, difficulty, readingMode, ttsSpeed, enableGrammar, effectiveEnableWordBank, voiceGender, tokenMode, (words) => {
     setWordBankPool(words);
     setAssembledWords([]);
   });
@@ -163,9 +172,29 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
     }
   }, [language]);
 
-  const { isRecording, toggleRecording } = useMicrophone((text, duration) => {
+  const { isRecording, startRecording, stopRecording } = useMicrophone((text, duration) => {
     sendMessage(text, duration);
-  });
+  }, silenceTimeout);
+
+  const handleMicClick = () => {
+    if (isConversationMode) {
+      setIsConversationMode(false);
+      stopRecording();
+    } else {
+      setIsConversationMode(true);
+      startRecording();
+    }
+  };
+
+  const prevAiSpeaking = useRef(isAiSpeaking);
+  useEffect(() => {
+    if (prevAiSpeaking.current && !isAiSpeaking) {
+      if (isConversationMode && !isRecording) {
+        startRecording();
+      }
+    }
+    prevAiSpeaking.current = isAiSpeaking;
+  }, [isAiSpeaking, isConversationMode, isRecording, startRecording]);
 
   // Auto-scroll
   useEffect(() => {
@@ -263,12 +292,12 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
             isTutorTyping={isTutorTyping}
           />
 
-          <ChatInput 
+          <ChatInput
             input={input}
             setInput={setInput}
             sendText={sendText}
             isRecording={isRecording}
-            toggleRecording={toggleRecording}
+            toggleRecording={handleMicClick}
             isAiSpeaking={isAiSpeaking}
             isThinking={isThinking}
             wordBankPool={wordBankPool}
@@ -280,7 +309,8 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
             setTtsSpeed={setTtsSpeed}
             replaySpeed={replaySpeed}
             setReplaySpeed={setReplaySpeed}
-            onRepeat={repeatLast}
+            onRepeat={(speed) => replayText(messages[messages.length - 1]?.content, speed)}
+            isConversationMode={isConversationMode}
           />
         </div>
 
@@ -312,9 +342,15 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
           readingMode={readingMode}
           setReadingMode={setReadingMode}
           micSensitivity={micSensitivity}
-          setMicSensitivity={setMicSensitivity}
+          setMicSensitivity={(val) => {
+            setMicSensitivity(val);
+            localStorage.setItem('polyglot_mic_sensitivity', val);
+          }}
           silenceTimeout={silenceTimeout}
-          setSilenceTimeout={setSilenceTimeout}
+          setSilenceTimeout={(val) => {
+            setSilenceTimeout(val);
+            localStorage.setItem('polyglot_silence_timeout', val);
+          }}
           enableGrammar={enableGrammar}
           setEnableGrammar={(val) => {
             setEnableGrammar(val);

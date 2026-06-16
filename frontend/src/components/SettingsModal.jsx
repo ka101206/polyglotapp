@@ -42,7 +42,7 @@ export default function SettingsModal({
     if (!newNickname.trim()) return;
     setIsUpdatingNickname(true);
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8081';
+      const apiUrl = '';
       const res = await fetch(`${apiUrl}/api/users/${user.user_id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -68,7 +68,7 @@ export default function SettingsModal({
     if (!newUsername.trim()) return;
     setIsUpdatingUsername(true);
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8081';
+      const apiUrl = '';
       const res = await fetch(`${apiUrl}/api/users/${user.user_id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -92,7 +92,7 @@ export default function SettingsModal({
 
   const handleDeleteAccount = async () => {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8081';
+      const apiUrl = '';
       const res = await fetch(`${apiUrl}/api/users/${user.user_id}`, { method: 'DELETE' });
       if (res.ok) {
         onLogout();

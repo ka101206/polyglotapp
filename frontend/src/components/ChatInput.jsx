@@ -1,5 +1,5 @@
 import React from 'react';
-import { Send, Mic, Square } from 'lucide-react';
+import { Send, Mic, Square, Phone } from 'lucide-react';
 
 export default function ChatInput({
   input,
@@ -18,7 +18,9 @@ export default function ChatInput({
   setTtsSpeed,
   replaySpeed,
   setReplaySpeed,
-  onRepeat
+  onRepeat,
+  isConversationMode,
+  setIsConversationMode
 }) {
   return (
     <div className="p-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shrink-0 z-10">
@@ -109,13 +111,16 @@ export default function ChatInput({
         <button
           type="button"
           onClick={toggleRecording}
+          title="Conversation Mode (Microphone)"
           className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-lg shrink-0 ${
             isRecording 
-              ? 'bg-red-500 hover:bg-red-600 text-black dark:text-white shadow-red-500/30 animate-pulse' 
-              : 'bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
+              ? 'bg-red-500 hover:bg-red-600 text-white shadow-red-500/30 animate-pulse' 
+              : isConversationMode
+                ? 'bg-green-500 hover:bg-green-600 text-white shadow-green-500/30'
+                : 'bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
           }`}
         >
-          {isRecording ? <Square size={18} /> : <Mic size={18} />}
+          {isConversationMode ? <Square size={18} /> : <Mic size={18} />}
         </button>
       </form>
     </div>

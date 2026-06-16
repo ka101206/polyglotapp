@@ -16,7 +16,7 @@ export function SelectionToolbar({ selectionToolbar, setSelectionToolbar, setDef
           const y = selectionToolbar.y + 45;
           setSelectionToolbar(null);
           window.getSelection().removeAllRanges();
-          const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8081';
+          const apiUrl = '';
           try {
             const res = await fetch(`${apiUrl}/api/ai/definition`, {
               method: 'POST',

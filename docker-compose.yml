@@ -63,7 +63,11 @@ services:
     environment:
       VITE_API_URL: ${POLYGLOT_PUBLIC_API_URL:-http://10.74.10.244:18082}
     ports:
-      - "${POLYGLOT_FRONTEND_PORT:-18080}:3000"
+      - "${POLYGLOT_FRONTEND_PORT:-18084}:3000"
+      - "18080:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     depends_on:
       backend:
         condition: service_healthy
