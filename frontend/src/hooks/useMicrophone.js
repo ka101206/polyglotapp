@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 
-export default function useMicrophone(onTranscription, silenceTimeoutSec = 2.5) {
+export default function useMicrophone(onTranscription, silenceTimeoutSec = 2.5, language = "Japanese") {
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorder = useRef(null);
   const audioChunks = useRef([]);
@@ -16,6 +16,10 @@ export default function useMicrophone(onTranscription, silenceTimeoutSec = 2.5) 
     if (isRecording) return;
 
     try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert("Microphone is not supported in this environment. Please ensure you are using HTTPS or localhost.");
+        return;
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       
       // Safari supports audio/mp4, Chrome/Firefox support audio/webm
@@ -89,6 +93,7 @@ export default function useMicrophone(onTranscription, silenceTimeoutSec = 2.5) 
         // The backend uses ffmpeg, so it can handle any extension, but we label it based on mimeType
         const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
         formData.append('file', audioBlob, `recording.${ext}`);
+        formData.append('language', language);
         
         const apiUrl = '';
         try {
@@ -98,7 +103,7 @@ export default function useMicrophone(onTranscription, silenceTimeoutSec = 2.5) 
           });
           const data = await res.json();
           if (data.text && onTranscription) {
-            onTranscription(data.text, duration);
+            onTranscription(data.text, duration, data.pronunciation);
           }
         } catch (err) {
           console.error("Transcription error:", err);

@@ -120,7 +120,8 @@ export default function SettingsModal({
         <div className="p-6 overflow-y-auto max-h-[70vh] space-y-6">
           <div className="space-y-3">
             <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Target Language</label>
-            <select value={language} onChange={(e) => setLanguage(e.target.value)} className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-blue-500 transition-colors">
+            <select disabled={!!user.forced_language} value={language} onChange={(e) => setLanguage(e.target.value)} className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              {user?.is_admin && <option value="None">None</option>}
               <option value="Japanese">Japanese</option>
               <option value="Spanish">Spanish</option>
               <option value="French">French</option>
@@ -128,11 +129,12 @@ export default function SettingsModal({
               <option value="Chinese">Chinese</option>
               <option value="Korean">Korean</option>
             </select>
+            {user.forced_language && <p className="text-xs text-blue-500 mt-1">Language is forced by your admin.</p>}
           </div>
           
           <div className="space-y-3">
             <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Difficulty</label>
-            <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-blue-500 transition-colors">
+            <select disabled={!!user.forced_difficulty} value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               {language === 'Japanese' ? (
                 <>
                   <option value="JLPT N5 (Beginner)">JLPT N5 (Beginner)</option>
@@ -167,26 +169,29 @@ export default function SettingsModal({
                 </>
               )}
             </select>
+            {user.forced_difficulty && <p className="text-xs text-blue-500 mt-1">Difficulty is forced by your admin.</p>}
           </div>
 
           {language === 'Japanese' && (
             <div className="space-y-3">
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Reading Help</label>
-              <select value={readingMode} onChange={(e) => setReadingMode(e.target.value)} className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-blue-500 transition-colors">
+              <select value={readingMode} onChange={(e) => setReadingMode(e.target.value)} disabled={!!user.forced_reading_mode} className={`w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-blue-500 transition-colors ${user.forced_reading_mode ? 'opacity-50 cursor-not-allowed' : ''}`}>
                 <option value="なし">None (Kanji)</option>
                 <option value="ふりがな">Furigana</option>
                 <option value="かなのみ">Kana Only</option>
               </select>
+              {user.forced_reading_mode && <p className="text-xs text-blue-500 mt-1">Reading mode is forced by your admin.</p>}
             </div>
           )}
 
           {language === 'Chinese' && (
             <div className="space-y-3">
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Reading Help</label>
-              <select value={readingMode} onChange={(e) => setReadingMode(e.target.value)} className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-blue-500 transition-colors">
+              <select value={readingMode} onChange={(e) => setReadingMode(e.target.value)} disabled={!!user.forced_reading_mode} className={`w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-blue-500 transition-colors ${user.forced_reading_mode ? 'opacity-50 cursor-not-allowed' : ''}`}>
                 <option value="なし">None (Hanzi)</option>
                 <option value="拼音">Pinyin</option>
               </select>
+              {user.forced_reading_mode && <p className="text-xs text-blue-500 mt-1">Reading mode is forced by your admin.</p>}
             </div>
           )}
 
@@ -316,8 +321,8 @@ export default function SettingsModal({
                 <span className="text-xs text-slate-500 dark:text-slate-400">Sacrifices naturalness and limits context to save tokens</span>
               </div>
               <div className="relative ml-4">
-                <input type="checkbox" className="sr-only peer" checked={tokenMode === 'low'} onChange={(e) => setTokenMode(e.target.checked ? 'low' : 'high')} />
-                <div className="w-11 h-6 bg-slate-300 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500"></div>
+                <input disabled={!!user.force_low_token_mode} type="checkbox" className="sr-only peer" checked={tokenMode === 'low'} onChange={(e) => setTokenMode(e.target.checked ? 'low' : 'high')} />
+                <div className={`w-11 h-6 bg-slate-300 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500 ${user.force_low_token_mode ? 'opacity-50 cursor-not-allowed' : ''}`}></div>
               </div>
             </label>
           </div>

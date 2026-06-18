@@ -6,6 +6,7 @@ export default function Auth({ onLogin }) {
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -21,7 +22,7 @@ export default function Auth({ onLogin }) {
       const response = await fetch(`${apiUrl}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, is_admin: isAdmin }),
       });
       
       const data = await response.json();
@@ -92,6 +93,21 @@ export default function Auth({ onLogin }) {
               placeholder="••••••••"
             />
           </div>
+
+          {!isLogin && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="flex items-center space-x-3 mt-4">
+              <input
+                type="checkbox"
+                id="isAdminCheckbox"
+                checked={isAdmin}
+                onChange={(e) => setIsAdmin(e.target.checked)}
+                className="h-5 w-5 rounded border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50"
+              />
+              <label htmlFor="isAdminCheckbox" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Register as Admin (B2B Dashboard)
+              </label>
+            </motion.div>
+          )}
 
           {error && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-red-400 text-sm text-center">

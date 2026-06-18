@@ -160,12 +160,42 @@ export function InlineFeedbackPopup({
             </div>
           )}
           {inlineFeedbackPopup.pronunciation && (
-            <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl text-blue-900 dark:text-blue-200/90 text-sm leading-relaxed whitespace-pre-wrap font-medium">
-              <div className="text-blue-700 dark:text-blue-400 font-bold mb-2 uppercase tracking-wider text-xs flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-blue-600 dark:bg-blue-400"></div>
-                Pronunciation
+            <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl text-blue-900 dark:text-blue-200/90 text-sm leading-relaxed font-medium">
+              <div className="text-blue-700 dark:text-blue-400 font-bold mb-3 uppercase tracking-wider text-xs flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue-600 dark:bg-blue-400"></div>
+                  Pronunciation Assessment
+                </div>
+                {(() => {
+                  try {
+                    const parsed = typeof inlineFeedbackPopup.pronunciation === 'string' ? JSON.parse(inlineFeedbackPopup.pronunciation) : inlineFeedbackPopup.pronunciation;
+                    return <span className="bg-blue-500/20 px-2 py-1 rounded-md">Score: {parsed.overall_score}%</span>;
+                  } catch (e) {
+                    return null;
+                  }
+                })()}
               </div>
-              {inlineFeedbackPopup.pronunciation}
+              <div className="flex flex-wrap gap-1">
+                {(() => {
+                  try {
+                    const parsed = typeof inlineFeedbackPopup.pronunciation === 'string' ? JSON.parse(inlineFeedbackPopup.pronunciation) : inlineFeedbackPopup.pronunciation;
+                    if (parsed.phonemes) {
+                      return parsed.phonemes.map((p, idx) => (
+                        <span 
+                          key={idx} 
+                          className={`text-lg ${p.score >= 90 ? 'text-green-500' : p.score >= 75 ? 'text-yellow-500' : 'text-red-500 underline decoration-red-500/50'}`}
+                          title={`Score: ${p.score}`}
+                        >
+                          {p.char}
+                        </span>
+                      ));
+                    }
+                  } catch (e) {
+                    return inlineFeedbackPopup.pronunciation;
+                  }
+                  return inlineFeedbackPopup.pronunciation;
+                })()}
+              </div>
             </div>
           )}
 

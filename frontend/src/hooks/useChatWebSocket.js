@@ -9,7 +9,9 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
   const [isTTSWarmingUp, setIsTTSWarmingUp] = useState(false);
   
   const ws = useRef(null);
-  const audioContextRef = useRef(null);
+  
+  const ttsSpeedRef = useRef(ttsSpeed);
+  useEffect(() => { ttsSpeedRef.current = ttsSpeed; }, [ttsSpeed]);
 
   const onWordBankRef = useRef(onWordBankReceived);
   useEffect(() => {
@@ -21,11 +23,6 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
   useEffect(() => {
     let reconnectTimeout = null;
     const connect = () => {
-      if (!audioContextRef.current) {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        audioContextRef.current = new AudioContext();
-      }
-
       const baseUrl = window.location.origin;
       const wsUrl = baseUrl.replace(/^http/, 'ws');
       const socket = new WebSocket(`${wsUrl}/ws/chat/${user_id}`);
@@ -55,12 +52,26 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
             bytes[i] = binaryString.charCodeAt(i);
           }
           
-          const audioBuffer = await audioContextRef.current.decodeAudioData(bytes.buffer.slice(0));
-          const source = audioContextRef.current.createBufferSource();
-          source.buffer = audioBuffer;
-          source.connect(audioContextRef.current.destination);
-          source.onended = () => { playNextInQueue(); };
-          source.start(0);
+          const blob = new Blob([bytes], { type: 'audio/wav' });
+          const url = URL.createObjectURL(blob);
+          const audio = new Audio(url);
+          audio.playbackRate = ttsSpeedRef.current;
+          
+          audio.onended = () => {
+             URL.revokeObjectURL(url);
+             playNextInQueue();
+          };
+          audio.onerror = (e) => {
+             console.error("Audio playback error:", e);
+             URL.revokeObjectURL(url);
+             playNextInQueue();
+          };
+          
+          audio.play().catch(e => {
+             console.error("Audio play blocked:", e);
+             URL.revokeObjectURL(url);
+             playNextInQueue();
+          });
         } catch (e) {
           console.error("Audio playback error:", e);
           playNextInQueue();
@@ -255,12 +266,12 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
   }, [language, voiceGender]);
 
   const unlockAudio = useCallback(() => {
-    if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-      audioContextRef.current.resume();
-    }
+    // Play a silent audio element to unlock iOS audio engine
+    const audio = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA");
+    audio.play().catch(() => {});
   }, []);
 
-  const sendMessage = useCallback((textToSend, duration = null) => {
+  const sendMessage = useCallback((textToSend, duration = null, pronunciation = null) => {
     if (!textToSend.trim() || !ws.current) return;
     
     // Play a silent sound to unlock audio engine on Safari and clear previous src
@@ -269,14 +280,22 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
     setMessages(prev => {
       const newMsg = [...prev];
       const last = newMsg.length > 0 ? { ...newMsg[newMsg.length - 1] } : null;
+      const msgObj = { role: 'user', content: textToSend };
+      if (pronunciation) msgObj.pronunciation = JSON.stringify(pronunciation);
+      
       if (last && last.type === 'scenario' && last.status === 'active') {
-        last.messages = [...last.messages, { role: 'user', content: textToSend }];
+        last.messages = [...last.messages, msgObj];
         newMsg[newMsg.length - 1] = last;
       } else {
-        newMsg.push({ role: 'user', content: textToSend });
+        newMsg.push(msgObj);
       }
       return newMsg;
     });
+
+    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
+      console.warn("WebSocket is not connected");
+      return;
+    }
 
     // Send the message OUTSIDE the state updater function to prevent double execution in React Strict Mode!
     ws.current.send(JSON.stringify({

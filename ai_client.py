@@ -220,6 +220,8 @@ Rules:
 
         if token_mode == "low":
             system_prompt = f"Role: Native {target_language} speaker.\nRules: <30 words. Register: {register} ({lang[register]}). Script: {lang['script']}."
+        
+        system_prompt += f"\nCRITICAL: You MUST answer strictly in {target_language}. Do NOT use English conversational fillers (like 'WELL', 'OH', etc.). ONLY output {target_language} text."
 
         gender_rules = f"You are a {voice_gender}. Match your speaking style, tone, and self-referential pronouns to your gender ({voice_gender})."
         if target_language == "Japanese":
@@ -231,7 +233,14 @@ Rules:
         system_prompt += f"\n- Persona: {gender_rules}"
 
         if token_mode == "high":
-            diff_rules = config.DIFFICULTY_PROMPT_MODIFIERS.get(difficulty, config.DIFFICULTY_PROMPT_MODIFIERS["Intermediate"])
+            base_diff = "Intermediate"
+            if "Beginner" in difficulty: base_diff = "Beginner"
+            elif "Elementary" in difficulty: base_diff = "Elementary"
+            elif "Pre-Advanced" in difficulty or "Upper Intermediate" in difficulty: base_diff = "Pre-Advanced"
+            elif "Intermediate" in difficulty: base_diff = "Intermediate"
+            elif "Advanced" in difficulty: base_diff = "Advanced"
+            
+            diff_rules = config.DIFFICULTY_PROMPT_MODIFIERS.get(base_diff, config.DIFFICULTY_PROMPT_MODIFIERS["Intermediate"])
             system_prompt += f"\nDifficulty: {difficulty}. {diff_rules}"
 
             if user_name:
@@ -430,40 +439,22 @@ User: "안녕하세요" → PERFECT"""
     # ---------- Definitions ----------
 
     async def get_definition(self, word, context, target_language):
-        import urllib.parse
-        import urllib.request
-        import json
-        import asyncio
-
-        def _fetch():
-            try:
-                safe_word = urllib.parse.quote(word)
-                url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q={safe_word}"
-                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req, timeout=3) as response:
-                    res = json.loads(response.read().decode())
-                    return res[0][0][0]
-            except Exception:
-                return None
-
-        translation = await asyncio.to_thread(_fetch)
-        if not translation:
+        system_prompt = f"""You are a {target_language} dictionary.
+Given the word '{word}' and the context '{context}', provide its meaning in English.
+Format your response exactly like this:
+Reading: <pronunciation/pinyin/romaji/kana here. If not applicable, write N/A>
+<A short, concise definition in English>"""
+        try:
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Define '{word}' in the context of: {context}"}
+            ]
+            response = await self._complete(messages, temperature=0.1, max_tokens=100)
+            if response:
+                return response.strip()
             return "Definition not available."
-
-        reading_prefix = ""
-        if target_language == "Japanese":
-            try:
-                import pykakasi
-                kks = pykakasi.kakasi()
-                res = kks.convert(word)
-                reading = "".join([item['hira'] for item in res])
-                if reading and reading != word:
-                    reading_prefix = f"Reading: {reading}\n"
-            except Exception:
-                pass
-
-        return f"{reading_prefix}{word}: {translation}"
-
+        except Exception:
+            return "Definition not available."
     # ---------- Word Bank ----------
 
     async def generate_word_bank(self, reply_text, target_language, include_decoys=False, token_mode="high"):
@@ -580,7 +571,7 @@ Explanation: [Entirely in English. {lang_script_rule}]"""
 Answer questions about this correction. Brief, encouraging, easy to understand.
 
 RULES:
-1. Explain ENTIRELY in English. The ONLY non-English text allowed is {target_language} words written in their native script.
+1. You MUST explain ENTIRELY in English. Do NOT explain in Russian or Chinese or any other language.
 2. {lang_script_rule}
 3. No Romaji. No Pinyin. No romanization of any kind. BAD: "やあ (ya-ah)" GOOD: "やあ"
 4. Be concise. Say each point once.
@@ -599,7 +590,8 @@ RULES:
     async def get_stateless_reply(self, prompt):
         sp = """[ROLE]
 You are an expert language grammar tutor. 
-Your job is to explain grammar, sentence structure, and vocabulary clearly and concisely in English. 
+Your job is to explain grammar, sentence structure, and vocabulary clearly and concisely in English.
+CRITICAL: You MUST answer ENTIRELY in English. Do NOT answer in Russian, Chinese, or any other language except to quote the text being analyzed. 
 Break down the components of the sentences provided to you so a learner can easily understand them.
 Feel free to use formatting like bullet points or newlines if it helps clarify the grammar."""
         try:

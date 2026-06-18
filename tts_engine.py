@@ -101,7 +101,8 @@ class TTSEngine:
     async def _edge_tts_fallback(self, text, speed=1.0, language="Japanese", gender="female"):
         """Edge TTS fallback for any language/gender combo without a dedicated engine."""
         import edge_tts
-
+        import re
+        text = re.sub(r'[,.]', ' ', text).strip()
         voice_map_male = {
             "Spanish": "es-ES-AlvaroNeural",
             "French": "fr-FR-HenriNeural",

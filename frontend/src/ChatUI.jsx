@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Inbox as InboxIcon } from 'lucide-react';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import ErrorBoundary from './ErrorBoundary';
 import useChatWebSocket from './hooks/useChatWebSocket';
@@ -8,11 +9,17 @@ import ChatInput from './components/ChatInput';
 import Sidebar from './components/Sidebar';
 import SettingsModal from './components/SettingsModal';
 import { SelectionToolbar, DefinitionPopup, InlineFeedbackPopup } from './components/Popups';
+import Inbox from './Inbox';
+import SRSReviewModal from './components/SRSReviewModal';
 
-export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDarkMode, setIsDarkMode }) {
-  const [language, setLanguage] = useState(() => initialLanguage || localStorage.getItem('polyglot_language') || 'Japanese');
+export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDarkMode, setIsDarkMode, onAdminClick }) {
+  const [language, setLanguage] = useState(() => {
+    if (initialLanguage) return initialLanguage;
+    if (user?.is_admin) return 'None';
+    return localStorage.getItem('polyglot_language') || 'Japanese';
+  });
   const [difficulty, setDifficulty] = useState(() => {
-    const savedLang = localStorage.getItem('polyglot_language') || 'Japanese';
+    const savedLang = user?.is_admin && !initialLanguage ? 'None' : (localStorage.getItem('polyglot_language') || 'Japanese');
     return localStorage.getItem(`polyglot_difficulty_${savedLang}`) || 'Intermediate';
   });
   const [readingMode, setReadingMode] = useState('なし');
@@ -35,6 +42,8 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
   const [showTokens, setShowTokens] = useState(() => localStorage.getItem('polyglot_show_tokens') === 'true');
   const [showSettings, setShowSettings] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showInbox, setShowInbox] = useState(false);
+  const [showSRSReview, setShowSRSReview] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [definitionPopup, setDefinitionPopup] = useState(null);
   const [selectionToolbar, setSelectionToolbar] = useState(null);
@@ -48,47 +57,49 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
   const messagesEndRef = useRef(null);
   const langCode = language === 'Japanese' ? 'ja' : language === 'Chinese' ? 'zh-CN' : language === 'Korean' ? 'ko' : language === 'Spanish' ? 'es' : language === 'French' ? 'fr' : language === 'Italian' ? 'it' : 'en';
 
-  useEffect(() => {
+  const getLocalizedDifficulty = (diffStr, lang) => {
     let levelStr = "Intermediate";
-    if (difficulty.includes("Beginner")) levelStr = "Beginner";
-    else if (difficulty.includes("Elementary")) levelStr = "Elementary";
-    else if (difficulty.includes("Upper Intermediate")) levelStr = "Upper Intermediate";
-    else if (difficulty.includes("Intermediate")) levelStr = "Intermediate";
-    else if (difficulty.includes("Pre-Advanced")) levelStr = "Pre-Advanced";
-    else if (difficulty.includes("Advanced")) levelStr = "Advanced";
+    if (diffStr.includes("Beginner")) levelStr = "Beginner";
+    else if (diffStr.includes("Elementary")) levelStr = "Elementary";
+    else if (diffStr.includes("Upper Intermediate")) levelStr = "Upper Intermediate";
+    else if (diffStr.includes("Intermediate")) levelStr = "Intermediate";
+    else if (diffStr.includes("Pre-Advanced")) levelStr = "Pre-Advanced";
+    else if (diffStr.includes("Advanced")) levelStr = "Advanced";
 
-    let newDiff = "Intermediate";
-    if (language === 'Japanese') {
-      if (levelStr === "Beginner") newDiff = "JLPT N5 (Beginner)";
-      else if (levelStr === "Elementary") newDiff = "JLPT N4 (Elementary)";
-      else if (levelStr === "Intermediate") newDiff = "JLPT N3 (Intermediate)";
-      else if (levelStr === "Upper Intermediate" || levelStr === "Pre-Advanced") newDiff = "JLPT N2 (Pre-Advanced)";
-      else if (levelStr === "Advanced") newDiff = "JLPT N1 (Advanced)";
-    } else if (language === 'Chinese') {
-      if (levelStr === "Beginner") newDiff = "HSK 1-2 (Beginner)";
-      else if (levelStr === "Elementary") newDiff = "HSK 3 (Elementary)";
-      else if (levelStr === "Intermediate") newDiff = "HSK 4 (Intermediate)";
-      else if (levelStr === "Upper Intermediate" || levelStr === "Pre-Advanced") newDiff = "HSK 5 (Upper Intermediate)";
-      else if (levelStr === "Advanced") newDiff = "HSK 6 (Advanced)";
-    } else if (language === 'Korean') {
-      if (levelStr === "Beginner") newDiff = "TOPIK Level 1 (Beginner)";
-      else if (levelStr === "Elementary") newDiff = "TOPIK Level 2 (Elementary)";
-      else if (levelStr === "Intermediate") newDiff = "TOPIK Level 3 (Intermediate)";
-      else if (levelStr === "Upper Intermediate" || levelStr === "Pre-Advanced") newDiff = "TOPIK Level 4 (Upper Intermediate)";
-      else if (levelStr === "Advanced") newDiff = "TOPIK Level 5-6 (Advanced)";
+    if (lang === 'Japanese') {
+      if (levelStr === "Beginner") return "JLPT N5 (Beginner)";
+      if (levelStr === "Elementary") return "JLPT N4 (Elementary)";
+      if (levelStr === "Intermediate") return "JLPT N3 (Intermediate)";
+      if (levelStr === "Upper Intermediate" || levelStr === "Pre-Advanced") return "JLPT N2 (Pre-Advanced)";
+      if (levelStr === "Advanced") return "JLPT N1 (Advanced)";
+    } else if (lang === 'Chinese') {
+      if (levelStr === "Beginner") return "HSK 1-2 (Beginner)";
+      if (levelStr === "Elementary") return "HSK 3 (Elementary)";
+      if (levelStr === "Intermediate") return "HSK 4 (Intermediate)";
+      if (levelStr === "Upper Intermediate" || levelStr === "Pre-Advanced") return "HSK 5 (Upper Intermediate)";
+      if (levelStr === "Advanced") return "HSK 6 (Advanced)";
+    } else if (lang === 'Korean') {
+      if (levelStr === "Beginner") return "TOPIK Level 1 (Beginner)";
+      if (levelStr === "Elementary") return "TOPIK Level 2 (Elementary)";
+      if (levelStr === "Intermediate") return "TOPIK Level 3 (Intermediate)";
+      if (levelStr === "Upper Intermediate" || levelStr === "Pre-Advanced") return "TOPIK Level 4 (Upper Intermediate)";
+      if (levelStr === "Advanced") return "TOPIK Level 5-6 (Advanced)";
     } else {
-      if (levelStr === "Beginner") newDiff = "CEFR A1 (Beginner)";
-      else if (levelStr === "Elementary") newDiff = "CEFR A2 (Elementary)";
-      else if (levelStr === "Intermediate") newDiff = "CEFR B1 (Intermediate)";
-      else if (levelStr === "Upper Intermediate" || levelStr === "Pre-Advanced") newDiff = "CEFR B2 (Upper Intermediate)";
-      else if (levelStr === "Advanced") newDiff = "CEFR C1 (Advanced)";
+      if (levelStr === "Beginner") return "CEFR A1 (Beginner)";
+      if (levelStr === "Elementary") return "CEFR A2 (Elementary)";
+      if (levelStr === "Intermediate") return "CEFR B1 (Intermediate)";
+      if (levelStr === "Upper Intermediate" || levelStr === "Pre-Advanced") return "CEFR B2 (Upper Intermediate)";
+      if (levelStr === "Advanced") return "CEFR C1 (Advanced)";
     }
-    
+    return "CEFR B1 (Intermediate)";
+  };
+
+  useEffect(() => {
     const savedForNewLang = localStorage.getItem(`polyglot_difficulty_${language}`);
     if (savedForNewLang) {
       setDifficulty(savedForNewLang);
     } else {
-      setDifficulty(newDiff);
+      setDifficulty(getLocalizedDifficulty(difficulty, language));
     }
   }, [language]);
 
@@ -103,6 +114,34 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
     localStorage.setItem('polyglot_language', language);
     localStorage.setItem('polyglot_token_mode', tokenMode);
   }, [difficulty, language, tokenMode]);
+
+  // Apply forced overrides when user object updates
+  useEffect(() => {
+    if (user.forced_language && user.forced_language !== language) {
+      setLanguage(user.forced_language);
+    }
+  }, [user.forced_language, language]);
+
+  useEffect(() => {
+    if (user.forced_difficulty) {
+      const localized = getLocalizedDifficulty(user.forced_difficulty, language);
+      if (localized !== difficulty) {
+        setDifficulty(localized);
+      }
+    }
+  }, [user.forced_difficulty, difficulty, language]);
+
+  useEffect(() => {
+    if (user.force_low_token_mode && tokenMode !== 'low') {
+      setTokenMode('low');
+    }
+  }, [user.force_low_token_mode, tokenMode]);
+
+  useEffect(() => {
+    if (user.forced_reading_mode && user.forced_reading_mode !== readingMode) {
+      setReadingMode(user.forced_reading_mode);
+    }
+  }, [user.forced_reading_mode, readingMode]);
 
   const fetchNotebook = async () => {
     try {
@@ -172,9 +211,40 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
     }
   }, [language]);
 
-  const { isRecording, startRecording, stopRecording } = useMicrophone((text, duration) => {
-    sendMessage(text, duration);
-  }, silenceTimeout);
+  // Adaptive CEFR Leveling
+  const prevMsgLengthRef = useRef(messages.length);
+  useEffect(() => {
+    if (messages.length > prevMsgLengthRef.current) {
+      prevMsgLengthRef.current = messages.length;
+      let recentUserMsgs = messages.filter(m => m.role === 'user').slice(-3);
+      if (recentUserMsgs.length === 3) {
+        let errorCount = 0;
+        let perfectCount = 0;
+        for (const m of recentUserMsgs) {
+          if (m.grammar) {
+            const gStr = m.grammar.replace(/[^a-zA-Z]/g, '').toUpperCase();
+            if (gStr === 'PERFECT') perfectCount++;
+            else errorCount++;
+          }
+        }
+        
+        const levels = ["Beginner", "Elementary", "Intermediate", "Upper-Intermediate", "Advanced", "Proficient"];
+        const currIdx = levels.indexOf(difficulty);
+        
+        if (errorCount === 3 && currIdx > 0 && !user.forced_difficulty) {
+           setDifficulty(levels[currIdx - 1]);
+           setMessages(prev => [...prev, { role: 'system', content: `Adaptive Leveling: Lowered difficulty to ${levels[currIdx - 1]} to provide more scaffolding.` }]);
+        } else if (perfectCount === 3 && currIdx !== -1 && currIdx < levels.length - 1 && !user.forced_difficulty) {
+           setDifficulty(levels[currIdx + 1]);
+           setMessages(prev => [...prev, { role: 'system', content: `Adaptive Leveling: Raised difficulty to ${levels[currIdx + 1]} based on excellent performance.` }]);
+        }
+      }
+    }
+  }, [messages, difficulty, user.forced_difficulty]);
+
+  const { isRecording, startRecording, stopRecording } = useMicrophone((text, duration, pronunciation) => {
+    sendMessage(text, duration, pronunciation);
+  }, silenceTimeout, language);
 
   const handleMicClick = () => {
     if (isConversationMode) {
@@ -251,6 +321,15 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
 
         {/* Main Chat Area (Left Side) */}
         <div className="flex-1 flex flex-col relative">
+          <div className="absolute top-4 right-4 z-40">
+            <button 
+              onClick={() => setShowInbox(true)}
+              className="p-2 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-800 rounded-full backdrop-blur-sm shadow-sm transition-all flex items-center justify-center"
+              title="Inbox"
+            >
+              <InboxIcon size={20} />
+            </button>
+          </div>
           <div className="h-2 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0 z-10 w-full" />
           
           <MessageList 
@@ -321,12 +400,15 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
           setShowDropdown={setShowDropdown}
           setShowSettings={setShowSettings}
           setShowAnalytics={setShowAnalytics}
+          setShowInbox={setShowInbox}
           sidebarTab={sidebarTab}
           setSidebarTab={setSidebarTab}
           notebook={notebook}
           deleteFromNotebook={deleteFromNotebook}
           messages={messages}
           triggerScenario={triggerScenario}
+          onAdminClick={onAdminClick}
+          setShowSRSReview={setShowSRSReview}
         />
 
         <SettingsModal 
@@ -381,6 +463,8 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
         />
 
         {showAnalytics && <AnalyticsDashboard user={user} onClose={() => setShowAnalytics(false)} />}
+        {showInbox && <Inbox user={user} onClose={() => setShowInbox(false)} />}
+        {showSRSReview && <SRSReviewModal user={user} onClose={() => setShowSRSReview(false)} />}
       </div>
     </ErrorBoundary>
   );

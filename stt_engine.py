@@ -20,10 +20,10 @@ class STTEngine:
             wav_bytes, err = process.communicate(input=audio_bytes)
             if process.returncode != 0:
                 print(f"FFMPEG Error: {err.decode('utf-8')}")
-                return "ERROR: Audio conversion failed."
+                return "ERROR: Audio conversion failed.", 0.0
         except Exception as e:
             print(f"Subprocess Error: {e}")
-            return f"ERROR: Subprocess {str(e)}"
+            return f"ERROR: Subprocess {str(e)}", 0.0
             
         try:
             with sr.AudioFile(io.BytesIO(wav_bytes)) as source:
@@ -35,11 +35,22 @@ class STTEngine:
             self.last_audio = np.frombuffer(raw_data, dtype=np.int16)
             self.sample_rate = audio.sample_rate
 
-            text = self.recognizer.recognize_google(audio, language=target_language)
-            return text
+            response = self.recognizer.recognize_google(audio, language=target_language, show_all=True)
+            if not response or not isinstance(response, dict) or 'alternative' not in response:
+                return "", 0.0
+                
+            alternatives = response['alternative']
+            if not alternatives:
+                return "", 0.0
+                
+            best_alt = alternatives[0]
+            text = best_alt.get('transcript', "")
+            confidence = best_alt.get('confidence', 0.85)
+            
+            return text, confidence
         except sr.UnknownValueError:
-            return ""
+            return "", 0.0
         except sr.RequestError as e:
-            return f"ERROR: Could not request results; {e}"
+            return f"ERROR: Could not request results; {e}", 0.0
         except Exception as e:
-            return f"ERROR: {str(e)}"
+            return f"ERROR: {str(e)}", 0.0

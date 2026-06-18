@@ -30,3 +30,7 @@ Janome>=0.5.0
 # New TTS engines
 style-bert-vits2>=2.5.0
 huggingface-hub>=0.20.0
+
+# Pronunciation scoring
+librosa>=0.10.0
+fastdtw>=0.3.4

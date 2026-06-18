@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronDown, Settings, BarChart2, LogOut, Trash2, User } from 'lucide-react';
+import { ChevronDown, Settings, BarChart2, LogOut, Trash2, User, Inbox as InboxIcon, Shield, BookOpen } from 'lucide-react';
 
 export const parseDefinition = (text) => {
   if (!text) return { definition: "", reading: null };
@@ -42,12 +42,15 @@ export default function Sidebar({
   setShowDropdown,
   setShowSettings,
   setShowAnalytics,
+  setShowInbox,
   sidebarTab,
   setSidebarTab,
   notebook,
   deleteFromNotebook,
   messages,
-  triggerScenario
+  triggerScenario,
+  onAdminClick,
+  setShowSRSReview
 }) {
   return (
     <div className="w-72 bg-white dark:bg-slate-950 border-l border-slate-200 dark:border-slate-800 flex flex-col z-20">
@@ -62,7 +65,16 @@ export default function Sidebar({
             <p className="text-[10px] text-slate-600 dark:text-slate-400">Polyglot Student</p>
           </div>
         </div>
-        <div className="relative shrink-0">
+        <div className="relative shrink-0 flex items-center gap-1">
+          {user.is_admin && (
+            <button 
+              onClick={() => onAdminClick?.()}
+              title="Admin Dashboard"
+              className="p-2 text-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+            >
+              <Shield className="w-5 h-5" />
+            </button>
+          )}
           <button onClick={() => setShowDropdown(!showDropdown)} className="p-2 text-slate-600 dark:text-slate-400 hover:text-black dark:hover:text-white rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors">
             <ChevronDown className={`w-5 h-5 transition-transform ${showDropdown ? 'rotate-180' : ''}`} />
           </button>
@@ -116,7 +128,17 @@ export default function Sidebar({
       <div className="flex-1 overflow-y-auto p-4">
         {sidebarTab === 'notebook' ? (
           <div className="space-y-4">
-            <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 px-2 uppercase tracking-wide">Saved Vocabulary</div>
+            <div className="flex items-center justify-between px-2">
+              <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Saved Vocabulary</div>
+            </div>
+            
+            <button 
+              onClick={() => setShowSRSReview(true)}
+              className="w-full py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 dark:bg-indigo-900/20 dark:hover:bg-indigo-900/40 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/50 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2"
+            >
+              <BookOpen size={16} /> Review Due Items
+            </button>
+
             {notebook.map((item) => {
               const { definition, reading } = parseDefinition(item.definition);
               return (

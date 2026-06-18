@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Globe } from 'lucide-react';
+import { Globe, Shield, Inbox as InboxIcon } from 'lucide-react';
+import Inbox from './Inbox';
 
 const LANGUAGES = [
   { value: 'Japanese', label: '日本語', sub: 'Japanese' },
@@ -11,9 +12,22 @@ const LANGUAGES = [
   { value: 'Italian', label: 'Italiano', sub: 'Italian' },
 ];
 
-export default function LanguageSelect({ user, onSelect }) {
+export default function LanguageSelect({ user, onSelect, onAdminClick }) {
+  const [showInbox, setShowInbox] = useState(false);
+
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4 relative">
+      <div className="absolute top-6 right-6">
+        <button 
+          onClick={() => setShowInbox(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-full hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors shadow-sm"
+        >
+          <InboxIcon size={20} /> <span className="font-medium text-sm">Inbox</span>
+        </button>
+      </div>
+
+      {showInbox && <Inbox user={user} onClose={() => setShowInbox(false)} />}
+      
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -44,6 +58,17 @@ export default function LanguageSelect({ user, onSelect }) {
             </motion.button>
           ))}
         </div>
+        
+        {user?.is_admin && (
+          <div className="mt-8 flex justify-center">
+            <button 
+              onClick={onAdminClick}
+              className="flex items-center px-4 py-2 bg-slate-300 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-400 dark:hover:bg-slate-700 rounded-lg text-sm font-medium transition-colors"
+            >
+              <Shield size={16} className="mr-2 text-indigo-500" /> Admin Dashboard
+            </button>
+          </div>
+        )}
       </motion.div>
     </div>
   );

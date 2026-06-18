@@ -165,7 +165,8 @@ class MeloTTSEngine:
                 f"Choose from {list(SUPPORTED_LANGUAGES)}"
             )
 
-        clean = text.strip()
+        import re
+        clean = re.sub(r'[,.]', ' ', text).strip()
         if not clean:
             logger.warning("generate_audio called with empty text.")
             return None
