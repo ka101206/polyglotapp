@@ -17,3 +17,16 @@ venv/
 .venv/
 cloudflared
 cloudflared.log
+
+# Secrets — never commit
+# SSH keys
+id_ed25519
+id_ed25519.pub
+id_rsa
+id_rsa.pub
+# TLS certificates / private keys (self-signed certs are environment-specific)
+*.key
+*.crt
+*.pem
+*.pfx
+*.p12
