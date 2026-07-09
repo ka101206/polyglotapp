@@ -457,11 +457,24 @@ User: "안녕하세요" → PERFECT"""
 
     # ---------- Definitions ----------
 
+    # Per-language instruction for the notebook "Reading" line.
+    READING_INSTRUCTIONS = {
+        # Japanese: kana furigana only — never romaji.
+        "Japanese": "the reading in hiragana furigana ONLY. Do NOT use romaji or any Latin letters.",
+        # Chinese: pinyin with tone marks.
+        "Chinese": "the reading in pinyin, with tone marks.",
+        # Korean: Latin-alphabet romanization (Revised Romanization).
+        "Korean": "the reading romanized in the Latin alphabet (Revised Romanization of Korean).",
+    }
+
     async def get_definition(self, word, context, target_language):
+        reading_instruction = self.READING_INSTRUCTIONS.get(
+            target_language, "the pronunciation. If not applicable, write N/A"
+        )
         system_prompt = f"""You are a {target_language} dictionary.
 Given the word '{word}' and the context '{context}', provide its meaning in English.
 Format your response exactly like this:
-Reading: <pronunciation/pinyin/romaji/kana here. If not applicable, write N/A>
+Reading: <{reading_instruction}>
 <A short, concise definition in English>"""
         try:
             messages = [

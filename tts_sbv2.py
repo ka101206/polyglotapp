@@ -31,12 +31,12 @@ _ASSETS_DIR = _BASE_DIR / "model_assets"
 # HuggingFace repo IDs and local directory names
 _VOICE_CONFIG = {
     "female": {
-        "repo_id": "litagin/style_bert_vits2_jvnv",
-        "local_dir": "jvnv",
-        "model_file": "jvnv-F1-jp/jvnv-F1-jp_e160_s14000.safetensors",
-        "config_file": "jvnv-F1-jp/config.json",
-        "style_file": "jvnv-F1-jp/style_vectors.npy",
-        "speaker": "jvnv-F1-jp",  # female speaker in multi-speaker model
+        "repo_id": "litagin/sbv2_koharune_ami",
+        "local_dir": "koharune_ami",
+        "model_file": "koharune-ami/koharune-ami.safetensors",
+        "config_file": "koharune-ami/config.json",
+        "style_file": "koharune-ami/style_vectors.npy",
+        "speaker": None,  # single-speaker model
     },
     "male": {
         "repo_id": "litagin/style_bert_vits2_jvnv",
