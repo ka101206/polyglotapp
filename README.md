@@ -55,6 +55,51 @@ the moment the container starts, and the container is self-contained / offline-c
 Because the model layer is cached before the application code is copied, ordinary code
 changes rebuild in seconds; only changing `tts_sbv2.py` re-downloads the models.
 
+## Remote Access via Tailscale
+
+The app is typically hosted on a development machine that isn't on your local
+network, so you reach it over [Tailscale](https://tailscale.com) rather than a plain
+LAN IP. Once connected, the app is at **`http://<tailscale-ip>:8080`**.
+
+### ⚠️ The #1 gotcha: shared devices get a different IP in every tailnet
+
+The host is usually **shared** into your tailnet from the owner's account. **A shared
+device is assigned a *different* `100.x` address in each tailnet it's shared into.**
+This is the most common reason people can't connect:
+
+- The IP the **owner** sees (e.g. what `tailscale status` shows *on the host itself*)
+  is **not** the IP **you** use.
+- You must use the address **your own tailnet** assigned to the shared device.
+
+**Find the right IP** — on your own machine, either:
+
+```bash
+tailscale status        # look for the shared host in the list; use ITS 100.x address
+```
+
+or open the [Tailscale admin console](https://login.tailscale.com/admin/machines) →
+**Machines**, find the shared host, and copy the IP shown there. Then browse to
+`http://<that-ip>:8080`.
+
+### Troubleshooting checklist
+
+1. **Is Tailscale actually connected?** Installing the app isn't enough — open it and
+   toggle it **on**. Run `tailscale status` on your machine; if the host doesn't appear
+   in the list, you're not connected to the right tailnet.
+2. **Same tailnet/account?** Tailscale `100.x` IPs only work between devices on the
+   *same* tailnet. Make sure you accepted the device share and are logged into the
+   account it was shared with.
+3. **Using the right (your-tailnet) IP?** See the gotcha above — not the owner's IP.
+4. **Test reachability:** `tailscale ping <ip>` from your machine.
+   - Ping works but the page hangs → a tailnet **ACL** may be blocking port 8080 for
+     shared users (the owner needs to allow it).
+   - Ping fails → the device share or authorization needs attention on the owner's side.
+5. **Prefer the raw `100.x` IP over MagicDNS hostnames** — DNS resolution across a shared
+   tailnet can be flaky; the numeric IP always works.
+
+> The host also exposes the app on its local network at `http://<lan-ip>:8080`, so if you
+> can get onto the *same* physical network as the host, Tailscale isn't required.
+
 ## Debug Console
 
 A self-contained health dashboard is served **directly by the backend** (not the React
