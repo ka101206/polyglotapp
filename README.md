@@ -100,6 +100,21 @@ or open the [Tailscale admin console](https://login.tailscale.com/admin/machines
 > The host also exposes the app on its local network at `http://<lan-ip>:8080`, so if you
 > can get onto the *same* physical network as the host, Tailscale isn't required.
 
+## Microphone / HTTPS
+
+Conversation mode uses the browser microphone, and browsers **only allow microphone
+access in a secure context** (HTTPS or `localhost`). Over a plain-HTTP IP the mic is
+blocked with "not supported". The stack therefore also serves the app over HTTPS with a
+self-signed certificate:
+
+- **`https://<host>:8443`** — use this for anything needing the microphone.
+
+Because the certificate is self-signed, browsers show a one-time "Your connection is not
+private" warning — click **Advanced → Proceed** once, and the mic works from then on. This
+does **not** expose the app publicly: it remains reachable only over the private tailnet /
+LAN (same audience as the HTTP port), never the public internet. To use a trusted cert
+instead, replace `nginx-selfsigned.crt` / `nginx-selfsigned.key`.
+
 ## Debug Console
 
 A self-contained health dashboard is served **directly by the backend** (not the React
