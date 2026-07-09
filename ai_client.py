@@ -74,7 +74,14 @@ class AIClient:
             max_tokens=max_tokens,
             extra_body={"chat_template_kwargs": {"enable_thinking": False}},
         )
-        return response.choices[0].message.content.strip()
+        msg = response.choices[0].message
+        # With thinking disabled, some vLLM reasoning parsers still route the
+        # reply into reasoning/reasoning_content instead of content.
+        text = (msg.content
+                or getattr(msg, "reasoning", None)
+                or getattr(msg, "reasoning_content", None)
+                or "")
+        return text.strip()
 
     async def _stream_sentences(self, messages, temperature=0.2, max_tokens=150):
         """Async generator that yields (text_delta, sentence_text, full_reply, success, is_done, extras)."""
@@ -99,8 +106,15 @@ class AIClient:
                 if hasattr(chunk, 'usage') and chunk.usage:
                     extras["tokens"] = chunk.usage.total_tokens
 
-                if chunk.choices and chunk.choices[0].delta.content:
-                    token = chunk.choices[0].delta.content
+                _delta = chunk.choices[0].delta if chunk.choices else None
+                token = None
+                if _delta is not None:
+                    # Thinking is disabled, but some vLLM reasoning parsers route
+                    # the reply into reasoning/reasoning_content instead of content.
+                    token = (_delta.content
+                             or getattr(_delta, "reasoning", None)
+                             or getattr(_delta, "reasoning_content", None))
+                if token:
                     full_text += token
 
                     reply_part = full_text
@@ -299,9 +313,14 @@ Rules:
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,
-                max_tokens=150
+                max_tokens=150,
+                extra_body={"chat_template_kwargs": {"enable_thinking": False}},
             )
-            summary = resp.choices[0].message.content.strip()
+            _m = resp.choices[0].message
+            summary = ((_m.content
+                        or getattr(_m, "reasoning", None)
+                        or getattr(_m, "reasoning_content", None)
+                        or "")).strip()
             if self.conversation_memory:
                 self.conversation_memory = self.conversation_memory + " " + summary
             else:
@@ -493,7 +512,8 @@ Mix nouns, verbs, particles, and punctuation. Do NOT use Romaji/Pinyin. Output O
     async def analyze_grammar(self, user_text, target_language, difficulty, context_history=None, token_mode="high"):
         cache_key = f"grammar:{target_language}:{user_text.strip().lower()}:{hash(str(context_history))}"
         if cache_key in self.word_bank_cache:
-            return self.word_bank_cache[cache_key], True
+            cached = self.word_bank_cache[cache_key]
+            return cached[0], cached[1], True
 
         lang_script_rule = ""
         if target_language == "Japanese":
@@ -513,6 +533,7 @@ Rules:
 - The Explanation MUST be written entirely in English.
 
 Format:
+Grammar Score: [0-100 integer. 100=perfect, 90+=minor style issue, 70-89=noticeable errors, below 70=major errors]
 Grammar Correct: YES/NO
 Correction: [if NO]
 Explanation: [Entirely in English. {lang_script_rule}]"""
@@ -530,9 +551,17 @@ Explanation: [Entirely in English. {lang_script_rule}]"""
                 max_tokens=200
             )
             raw = raw.strip()
+
+            # Parse numeric grammar score
+            grammar_score = 85  # default
+            import re as _re
+            score_match = _re.search(r'Grammar Score:\s*(\d+)', raw)
+            if score_match:
+                grammar_score = max(0, min(100, int(score_match.group(1))))
             
             if "Grammar Correct: [YES]" in raw or "Grammar Correct: YES" in raw:
-                raw = "PERFECT"
+                grammar_score = max(grammar_score, 95)  # Ensure high score for correct grammar
+                feedback = "PERFECT"
             else:
                 correction = ""
                 explanation = ""
@@ -543,16 +572,18 @@ Explanation: [Entirely in English. {lang_script_rule}]"""
                         explanation = line.replace("Explanation:", "").strip().strip("[]")
                 
                 if correction and explanation:
-                    raw = f"Correction: {correction}\n\nExplanation: {explanation}"
+                    feedback = f"Correction: {correction}\n\nExplanation: {explanation}"
                 elif correction:
-                    raw = f"Correction: {correction}"
+                    feedback = f"Correction: {correction}"
                 elif explanation:
-                    raw = f"Explanation: {explanation}"
+                    feedback = f"Explanation: {explanation}"
+                else:
+                    feedback = raw
 
-            self.word_bank_cache[cache_key] = raw
-            return raw, True
+            self.word_bank_cache[cache_key] = (feedback, grammar_score)
+            return feedback, grammar_score, True
         except Exception as e:
-            return None, False
+            return None, 0, False
 
     # ---------- Grammar Tutor Chat ----------
 
