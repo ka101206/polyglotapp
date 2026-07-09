@@ -27,6 +27,10 @@ services:
     build:
       context: .
       dockerfile: backend.Dockerfile
+      args:
+        # Optional: pass a HuggingFace token to speed up the build-time model
+        # download and avoid anonymous rate limits. Anonymous works too.
+        HF_TOKEN: ${HF_TOKEN:-}
     container_name: polyglot-spark-backend
     environment:
       DATABASE_URL: postgresql://${POLYGLOT_DB_USER:-polyglot}:${POLYGLOT_DB_PASSWORD:?Set POLYGLOT_DB_PASSWORD in .env}@db:5432/${POLYGLOT_DB_NAME:-polyglot}
@@ -35,8 +39,8 @@ services:
       OPENAI_API_KEY: ${POLYGLOT_OPENAI_API_KEY:-token-nv}
     ports:
       - "${POLYGLOT_BACKEND_PORT:-18082}:8081"
-    volumes:
-      - hf_cache:/root/.cache/huggingface
+    # TTS models are baked into the image (see backend.Dockerfile), so no
+    # model volume is mounted here — an empty volume would shadow them.
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -62,9 +66,6 @@ services:
     container_name: polyglot-spark-frontend
     environment:
       VITE_API_URL: ${POLYGLOT_PUBLIC_API_URL:-http://10.74.10.244:18082}
-    ports:
-      - "${POLYGLOT_FRONTEND_PORT:-18084}:3000"
-      - "18080:3000"
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -84,6 +85,24 @@ services:
       retries: 20
     restart: unless-stopped
 
+  proxy:
+    image: nginx:alpine
+    container_name: polyglot-spark-proxy
+    ports:
+      - "${POLYGLOT_FRONTEND_PORT:-18084}:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - polyglot-spark
+    restart: unless-stopped
+
+
+
+
+
 networks:
   polyglot-spark:
     name: polyglot-spark
@@ -91,5 +110,3 @@ networks:
 volumes:
   polyglot_spark_pgdata:
     name: aboveavg_polyglot_spark_pgdata
-  hf_cache:
-    name: aboveavg_polyglot_hf_cache
