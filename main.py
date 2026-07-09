@@ -12,6 +12,7 @@ import bcrypt
 import pykakasi
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager
@@ -117,6 +118,18 @@ def get_analytics(user_id: int, db: Session = Depends(get_db)):
 def health():
     return {"status": "ok"}
 
+# ---------- Debug dashboard ----------
+
+@app.get("/api/debug/status")
+async def debug_status():
+    from debug_status import collect_status
+    return await collect_status(ai_client, tts_engine)
+
+@app.get("/debug", response_class=HTMLResponse)
+def debug_dashboard():
+    from debug_status import DEBUG_HTML
+    return DEBUG_HTML
+
 # ---------- Text helpers ----------
 
 def strip_romaji(text: str) -> str:
@@ -192,9 +205,11 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
             return # Skip grammar checks completely in low mode
         history_msgs = ai_client.scenario_history[-4:] if scenario else ai_client.conversation_history[-4:]
         history_str = "\n".join([f"{m.get('role')}: {m.get('content')}" for m in history_msgs if m.get('role')])
-        grammar, ok = await ai_client.analyze_grammar(user_text, lang, diff, context_history=history_str, token_mode=token_mode)
-        print(f"[DEBUG] fetch_grammar output: '{grammar}'", flush=True)
+        grammar, grammar_score, ok = await ai_client.analyze_grammar(user_text, lang, diff, context_history=history_str, token_mode=token_mode)
+        print(f"[DEBUG] fetch_grammar output: '{grammar}' score={grammar_score}", flush=True)
         if ok and grammar:
+            # Always record the real grammar score
+            analytics_manager.add_grammar_score(grammar_score)
             if grammar.strip() != "PERFECT":
                 analytics_manager.add_mistake()
                 if scenario:
@@ -410,7 +425,6 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
 
                 if goal_reached or "[GOAL_REACHED]" in (final_full_reply or ""):
                     analytics_manager.add_fluency_score(random.randint(70, 95))
-                    analytics_manager.add_grammar_score(random.randint(70, 95))
                     analytics_manager.add_listening_score(random.randint(70, 95))
 
                     critique = (
@@ -659,7 +673,7 @@ async def get_definition(payload: dict):
     return {"definition": definition}
 
 @app.post("/api/audio/transcribe")
-async def transcribe_audio(file: UploadFile = File(...), language: str = Form("Japanese")):
+async def transcribe_audio(file: UploadFile = File(...), language: str = Form("Japanese"), user_id: int = Form(0)):
     from stt_engine import STTEngine
     stt = STTEngine()
     audio_bytes = await file.read()
@@ -709,6 +723,17 @@ async def transcribe_audio(file: UploadFile = File(...), language: str = Form("J
         "phonemes": phonemes
     }
     
+    # Save pronunciation score to analytics
+    if user_id > 0 and base_score > 0:
+        try:
+            from analytics import AnalyticsManager
+            pron_db = SessionLocal()
+            pron_analytics = AnalyticsManager(pron_db, user_id)
+            pron_analytics.add_pronunciation_score(base_score)
+            pron_db.close()
+        except Exception as e:
+            print(f"Failed to save pronunciation score: {e}")
+
     return {"text": text, "pronunciation": pronunciation}
 
 @app.get("/api/notebook")

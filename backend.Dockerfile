@@ -15,13 +15,17 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
-
 # Bake TTS models into the image so no download happens at runtime.
+# Only the files needed to resolve the model repos/paths are copied first, so
+# this large (~3GB) layer stays cached across ordinary application code changes.
 # HF_TOKEN is optional (anonymous downloads work, just slower / rate-limited).
+COPY tts_sbv2.py download_models.py ./
 ARG HF_TOKEN=""
 ENV HF_HUB_DISABLE_TELEMETRY=1
 RUN HF_TOKEN=${HF_TOKEN} python download_models.py
+
+# Now the rest of the application (changes here won't invalidate the model layer).
+COPY . .
 
 # Expose FastAPI port
 EXPOSE 8081
