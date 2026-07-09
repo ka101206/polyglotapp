@@ -236,13 +236,16 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
             return # Skip grammar checks completely in low mode
         history_msgs = ai_client.scenario_history[-4:] if scenario else ai_client.conversation_history[-4:]
         history_str = "\n".join([f"{m.get('role')}: {m.get('content')}" for m in history_msgs if m.get('role')])
-        grammar, grammar_score, ok = await ai_client.analyze_grammar(user_text, lang, diff, context_history=history_str, token_mode=token_mode)
-        print(f"[DEBUG] fetch_grammar output: '{grammar}' score={grammar_score}", flush=True)
+        grammar, grammar_score, ok, weak_key = await ai_client.analyze_grammar(user_text, lang, diff, context_history=history_str, token_mode=token_mode)
+        print(f"[DEBUG] fetch_grammar output: '{grammar}' score={grammar_score} weak={weak_key}", flush=True)
         if ok and grammar:
-            # Always record the real grammar score
+            # Grammar is a sub-stat of Fluency now.
             analytics_manager.add_grammar_score(grammar_score)
             if grammar.strip() != "PERFECT":
                 analytics_manager.add_mistake()
+                # Track the grammar weak point (accurate, from the LLM analysis).
+                if weak_key:
+                    analytics_manager.record_weak_point("grammar", weak_key, grammar_score)
                 if scenario:
                     scenario_grammar_errors.append(grammar)
             await websocket.send_json({"type": "grammar", "content": grammar})
@@ -466,7 +469,8 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
                         asyncio.create_task(fetch_word_bank(clean_reply, language, difficulty, token_mode))
 
                 if goal_reached or "[GOAL_REACHED]" in (final_full_reply or ""):
-                    analytics_manager.add_fluency_score(random.randint(70, 95))
+                    # Fluency is now computed from its sub-stats (confidence/flow/grammar),
+                    # so it is no longer fabricated here.
                     analytics_manager.add_listening_score(random.randint(70, 95))
 
                     critique = (
@@ -736,49 +740,32 @@ async def transcribe_audio(file: UploadFile = File(...), language: str = Form("J
     text, _ = stt.transcribe_audio(audio_bytes, target_language=bcp47_lang)
     
     if text.startswith("ERROR:") or not text:
-        return {"text": text, "pronunciation": {"overall_score": 0, "phonemes": []}}
-        
-    base_score = 80
+        return {"text": text, "speech": {"confidence": 0, "flow": 0}}
+
+    # Analyze confidence + flow from the raw audio (two of the three Fluency sub-stats).
+    speech = {"confidence": 0, "flow": 0, "drops": []}
     if stt.last_audio is not None:
         try:
-            from tts_engine import TTSEngine
-            from audio_comparison import compare_audio
-            tts_engine = TTSEngine()
-            
-            tts_wav_bytes = bytearray()
-            async for chunk in tts_engine.generate_audio_stream(text, speed=1.0, language=language, gender="female"):
-                tts_wav_bytes.extend(chunk)
-                
-            if tts_wav_bytes:
-                base_score = compare_audio(stt.last_audio, stt.sample_rate, bytes(tts_wav_bytes))
+            from audio_metrics import analyze_speech
+            speech = analyze_speech(stt.last_audio, stt.sample_rate, transcript=text, language=language)
         except Exception as e:
-            print(f"Audio comparison error: {e}")
+            print(f"Audio metrics error: {e}")
 
-    phonemes = []
-    for char in text:
-        if char.strip():
-            score = max(0, min(100, base_score + random.randint(-5, 5)))
-            phonemes.append({"char": char, "score": score})
-        else:
-            phonemes.append({"char": char, "score": 100})
-            
-    pronunciation = {
-        "overall_score": base_score,
-        "phonemes": phonemes
-    }
-    
-    # Save pronunciation score to analytics
-    if user_id > 0 and base_score > 0:
+    # Save sub-stats + weak points to analytics.
+    if user_id > 0:
         try:
             from analytics import AnalyticsManager
-            pron_db = SessionLocal()
-            pron_analytics = AnalyticsManager(pron_db, user_id)
-            pron_analytics.add_pronunciation_score(base_score)
-            pron_db.close()
+            met_db = SessionLocal()
+            met_analytics = AnalyticsManager(met_db, user_id)
+            met_analytics.add_confidence_score(speech.get("confidence", 0))
+            met_analytics.add_flow_score(speech.get("flow", 0))
+            for drop in speech.get("drops", []):
+                met_analytics.record_weak_point(drop.get("type"), drop.get("word"), drop.get("score", 0))
+            met_db.close()
         except Exception as e:
-            print(f"Failed to save pronunciation score: {e}")
+            print(f"Failed to save speech metrics: {e}")
 
-    return {"text": text, "pronunciation": pronunciation}
+    return {"text": text, "speech": {"confidence": speech.get("confidence", 0), "flow": speech.get("flow", 0)}}
 
 @app.get("/api/notebook")
 async def get_notebook(user_id: int):

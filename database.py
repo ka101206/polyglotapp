@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, ForeignKey, Text, Date, text, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, ForeignKey, Text, Date, text, Boolean, UniqueConstraint
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 
 
@@ -54,6 +54,7 @@ class User(Base):
     analytics = relationship("Analytic", back_populates="user", cascade="all, delete-orphan")
     sessions = relationship("ConversationSession", back_populates="user", cascade="all, delete-orphan")
     invites = relationship("GroupInvite", back_populates="user", cascade="all, delete-orphan")
+    weak_points = relationship("WeakPoint", back_populates="user", cascade="all, delete-orphan")
 
 class GroupInvite(Base):
     __tablename__ = "group_invites"
@@ -130,7 +131,38 @@ class Analytic(Base):
     sum_listening_score = Column(Float, default=0.0)
     count_listening_score = Column(Integer, default=0)
     
+    sum_pronunciation_score = Column(Float, default=0.0)
+    count_pronunciation_score = Column(Integer, default=0)
+
+    # Fluency sub-stats (fluency = average of confidence, flow, grammar)
+    sum_confidence_score = Column(Float, default=0.0)
+    count_confidence_score = Column(Integer, default=0)
+
+    sum_flow_score = Column(Float, default=0.0)
+    count_flow_score = Column(Integer, default=0)
+
     user = relationship("User", back_populates="analytics")
+
+
+class WeakPoint(Base):
+    """Aggregated counter of things a user struggles with, so the dashboard can
+    surface weak points without storing a row per occurrence (light load).
+
+    category: 'grammar' | 'flow' | 'confidence'
+    key:      the grammar issue, or the word/sound where flow/confidence dropped
+    """
+    __tablename__ = "weak_points"
+    __table_args__ = (UniqueConstraint("user_id", "category", "key", name="uq_weakpoint"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    category = Column(String(20), nullable=False)
+    key = Column(String(200), nullable=False)
+    count = Column(Integer, default=1)
+    sum_score = Column(Float, default=0.0)   # accumulated severity score, for averaging
+    last_seen = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="weak_points")
 
 def init_db():
     Base.metadata.create_all(bind=engine)
@@ -174,6 +206,27 @@ def init_db():
             conn.execute(text("ALTER TABLE vocabularies ADD COLUMN repetitions INTEGER DEFAULT 0;"))
     except Exception:
         pass
+
+    # Pronunciation analytics migration
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE analytics ADD COLUMN sum_pronunciation_score FLOAT DEFAULT 0.0;"))
+            conn.execute(text("ALTER TABLE analytics ADD COLUMN count_pronunciation_score INTEGER DEFAULT 0;"))
+    except Exception:
+        pass
+
+    # Fluency sub-stats migration (confidence + flow)
+    for col, coltype in [
+        ("sum_confidence_score", "FLOAT DEFAULT 0.0"),
+        ("count_confidence_score", "INTEGER DEFAULT 0"),
+        ("sum_flow_score", "FLOAT DEFAULT 0.0"),
+        ("count_flow_score", "INTEGER DEFAULT 0"),
+    ]:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE analytics ADD COLUMN {col} {coltype};"))
+        except Exception:
+            pass
 
 def get_db():
     db = SessionLocal()

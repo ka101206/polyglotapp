@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 
-export default function useMicrophone(onTranscription, silenceTimeoutSec = 2.5, language = "Japanese") {
+export default function useMicrophone(onTranscription, silenceTimeoutSec = 2.5, language = "Japanese", userId = null) {
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorder = useRef(null);
   const audioChunks = useRef([]);
@@ -94,6 +94,9 @@ export default function useMicrophone(onTranscription, silenceTimeoutSec = 2.5, 
         const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
         formData.append('file', audioBlob, `recording.${ext}`);
         formData.append('language', language);
+        if (userId !== null) {
+          formData.append('user_id', userId.toString());
+        }
         
         const apiUrl = '';
         try {
@@ -103,7 +106,7 @@ export default function useMicrophone(onTranscription, silenceTimeoutSec = 2.5, 
           });
           const data = await res.json();
           if (data.text && onTranscription) {
-            onTranscription(data.text, duration, data.pronunciation);
+            onTranscription(data.text, duration, data.speech);
           }
         } catch (err) {
           console.error("Transcription error:", err);

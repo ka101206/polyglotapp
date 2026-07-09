@@ -530,7 +530,7 @@ Mix nouns, verbs, particles, and punctuation. Do NOT use Romaji/Pinyin. Output O
         cache_key = f"grammar:{target_language}:{user_text.strip().lower()}:{hash(str(context_history))}"
         if cache_key in self.word_bank_cache:
             cached = self.word_bank_cache[cache_key]
-            return cached[0], cached[1], True
+            return cached[0], cached[1], True, (cached[2] if len(cached) > 2 else None)
 
         lang_script_rule = ""
         if target_language == "Japanese":
@@ -553,7 +553,8 @@ Format:
 Grammar Score: [0-100 integer. 100=perfect, 90+=minor style issue, 70-89=noticeable errors, below 70=major errors]
 Grammar Correct: YES/NO
 Correction: [if NO]
-Explanation: [Entirely in English. {lang_script_rule}]"""
+Explanation: [Entirely in English. {lang_script_rule}]
+Category: [if NO: a short 2-4 word grammar error TYPE in English for tracking weak points, e.g. "particle usage", "verb conjugation", "word order", "wrong tense". if YES: NONE]"""
         user_msg = ""
         if context_history:
             user_msg += f"Context:\n{context_history}\n\n"
@@ -576,18 +577,25 @@ Explanation: [Entirely in English. {lang_script_rule}]"""
             if score_match:
                 grammar_score = max(0, min(100, int(score_match.group(1))))
             
+            weak_key = None
             if "Grammar Correct: [YES]" in raw or "Grammar Correct: YES" in raw:
                 grammar_score = max(grammar_score, 95)  # Ensure high score for correct grammar
                 feedback = "PERFECT"
             else:
                 correction = ""
                 explanation = ""
+                category = ""
                 for line in raw.split("\n"):
                     if line.startswith("Correction:"):
                         correction = line.replace("Correction:", "").strip().strip("[]")
                     elif line.startswith("Explanation:"):
                         explanation = line.replace("Explanation:", "").strip().strip("[]")
-                
+                    elif line.startswith("Category:"):
+                        category = line.replace("Category:", "").strip().strip("[]")
+
+                if category and category.upper() not in ("NONE", "N/A", ""):
+                    weak_key = category.lower()
+
                 if correction and explanation:
                     feedback = f"Correction: {correction}\n\nExplanation: {explanation}"
                 elif correction:
@@ -597,10 +605,10 @@ Explanation: [Entirely in English. {lang_script_rule}]"""
                 else:
                     feedback = raw
 
-            self.word_bank_cache[cache_key] = (feedback, grammar_score)
-            return feedback, grammar_score, True
+            self.word_bank_cache[cache_key] = (feedback, grammar_score, weak_key)
+            return feedback, grammar_score, True, weak_key
         except Exception as e:
-            return None, 0, False
+            return None, 0, False, None
 
     # ---------- Grammar Tutor Chat ----------
 
