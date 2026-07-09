@@ -133,7 +133,7 @@ async def check_internet() -> dict:
 # ---------------------------------------------------------------------------
 # Aggregate
 # ---------------------------------------------------------------------------
-async def collect_status(ai_client, tts_engine) -> dict:
+async def collect_status(ai_client, tts_engine, connections=None) -> dict:
     database = check_database()
     stt = check_stt()
     tts_japanese = check_tts_japanese(tts_engine)
@@ -164,6 +164,7 @@ async def collect_status(ai_client, tts_engine) -> dict:
             "hostname": socket.gethostname(),
         },
         "checks": checks,
+        "connections": connections or [],
     }
 
 
@@ -197,6 +198,15 @@ DEBUG_HTML = """<!doctype html>
   .meta { font-size:11px; color:#64748b; margin-top:8px; }
   .cfg { font-size:12px; color:#94a3b8; margin-bottom:18px; }
   .cfg b { color:#e2e8f0; }
+  h3 { font-size:14px; margin:26px 0 12px; color:#e2e8f0; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid #1f2937; }
+  th { color:#64748b; font-weight:600; }
+  td { color:#cbd5e1; }
+  .badge { font-size:10px; padding:2px 7px; border-radius:999px; font-weight:700; }
+  .badge.admin { background:#3b1d5e; color:#c4b5fd; }
+  .badge.student { background:#0e3a4a; color:#7dd3fc; }
+  .empty { color:#64748b; font-size:12px; padding:10px; }
   button { background:#1f2937; color:#e6edf3; border:1px solid #374151; border-radius:8px;
            padding:6px 12px; font:inherit; cursor:pointer; }
   button:hover { background:#374151; }
@@ -215,6 +225,9 @@ DEBUG_HTML = """<!doctype html>
   <div id="banner" class="banner warn">Loading…</div>
   <div class="cfg" id="cfg"></div>
   <div class="grid" id="grid"></div>
+
+  <h3>Active connections (<span id="conncount">0</span>)</h3>
+  <div id="conns"></div>
 
 <script>
 const LABELS = {
@@ -255,6 +268,31 @@ function render(d){
       '<div class="meta">'+c.status.toUpperCase()+' · '+c.latency_ms+' ms</div>';
     grid.appendChild(div);
   }
+  renderConns(d.connections || []);
+}
+function ago(iso){
+  const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime())/1000));
+  if (s < 60) return s + 's';
+  if (s < 3600) return Math.floor(s/60) + 'm ' + (s%60) + 's';
+  return Math.floor(s/3600) + 'h ' + Math.floor((s%3600)/60) + 'm';
+}
+function renderConns(conns){
+  document.getElementById('conncount').textContent = conns.length;
+  const el = document.getElementById('conns');
+  if (!conns.length){ el.innerHTML = '<div class="empty">No active WebSocket connections.</div>'; return; }
+  let rows = conns.map(c =>
+    '<tr>'+
+    '<td><span class="badge '+(c.is_admin?'admin':'student')+'">'+(c.is_admin?'ADMIN':'STUDENT')+'</span></td>'+
+    '<td>'+esc(c.username)+' <span style="color:#64748b">#'+esc(c.user_id)+'</span></td>'+
+    '<td>'+esc(c.language || '—')+'</td>'+
+    '<td>'+esc(c.messages)+'</td>'+
+    '<td>'+ago(c.connected_at)+'</td>'+
+    '<td>'+ago(c.last_activity)+' ago</td>'+
+    '</tr>'
+  ).join('');
+  el.innerHTML =
+    '<table><thead><tr><th>Role</th><th>User</th><th>Language</th><th>Msgs</th><th>Connected</th><th>Last activity</th></tr></thead>'+
+    '<tbody>'+rows+'</tbody></table>';
 }
 load();
 setInterval(load, 5000);

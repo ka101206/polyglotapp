@@ -234,6 +234,8 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
 
       socket.onopen = () => {
         console.log("WebSocket connected successfully");
+        // No language selected (e.g. admin view) — don't warm up TTS.
+        if (!language) return;
         setIsTTSWarmingUp(true);
         socket.send(JSON.stringify({ type: 'warmup_tts', language, gender: voiceGender }));
       };
@@ -255,7 +257,7 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
   const prevGenderForWarmup = useRef(voiceGender);
 
   useEffect(() => {
-    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+    if (ws.current && ws.current.readyState === WebSocket.OPEN && language) {
       if (prevLangForWarmup.current !== language || prevGenderForWarmup.current !== voiceGender) {
         setIsTTSWarmingUp(true);
         ws.current.send(JSON.stringify({ type: 'warmup_tts', language, gender: voiceGender }));

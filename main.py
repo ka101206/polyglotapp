@@ -45,6 +45,10 @@ ai_client = AIClient()
 tts_engine = TTSEngine()
 _kakasi = pykakasi.kakasi()  # Reuse a single instance
 
+# Live WebSocket connections keyed by session_id — surfaced on the debug dashboard
+# so multiple accounts (e.g. admin + student) can be watched at once.
+ACTIVE_CONNECTIONS: dict[str, dict] = {}
+
 # ---------- Auth ----------
 
 class AuthRequest(BaseModel):
@@ -123,7 +127,7 @@ def health():
 @app.get("/api/debug/status")
 async def debug_status():
     from debug_status import collect_status
-    return await collect_status(ai_client, tts_engine)
+    return await collect_status(ai_client, tts_engine, list(ACTIVE_CONNECTIONS.values()))
 
 @app.get("/debug", response_class=HTMLResponse)
 def debug_dashboard():
@@ -186,6 +190,19 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
     db.add(conv_session)
     db.commit()
 
+    # Register this live connection for the debug dashboard.
+    _conn_user = db.query(User).filter(User.id == user_id).first()
+    ACTIVE_CONNECTIONS[session_id] = {
+        "conn_id": session_id,
+        "user_id": user_id,
+        "username": (_conn_user.username if _conn_user else f"user{user_id}"),
+        "is_admin": bool(_conn_user.is_admin) if _conn_user else False,
+        "language": None,
+        "messages": 0,
+        "connected_at": datetime.utcnow().isoformat() + "Z",
+        "last_activity": datetime.utcnow().isoformat() + "Z",
+    }
+
     async def send_audio(text, speed, language, gender="female"):
         """Generate and send audio for a single sentence."""
         async for audio_bytes in tts_engine.generate_audio_stream(text, speed=speed, language=language, gender=gender):
@@ -242,10 +259,16 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
 
             # --- Warmup TTS ---
             if msg_type == "warmup_tts":
-                req_lang = payload.get("language", "Japanese")
-                if req_lang == "None":
-                    continue
+                req_lang = payload.get("language")
                 req_gender = payload.get("gender", "female")
+                # Admin / language-less views send null — skip instead of trying to
+                # load a TTS model for "None". Catches both JSON null and "None".
+                if not req_lang or req_lang == "None" or req_lang not in config.SUPPORTED_LANGUAGES:
+                    await websocket.send_json({"type": "tts_warmup_done"})
+                    continue
+                if session_id in ACTIVE_CONNECTIONS:
+                    ACTIVE_CONNECTIONS[session_id]["language"] = req_lang
+                    ACTIVE_CONNECTIONS[session_id]["last_activity"] = datetime.utcnow().isoformat() + "Z"
                 try:
                     await websocket.send_json({"type": "tts_warmup_start"})
                     await tts_engine.warmup(req_lang, req_gender)
@@ -310,6 +333,11 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
             req_gender = payload.get("gender", "female")
             token_mode = payload.get("token_mode", "high")
             print(f"[DEBUG] Chat payload received: enable_grammar={enable_grammar}")
+
+            if session_id in ACTIVE_CONNECTIONS:
+                ACTIVE_CONNECTIONS[session_id]["messages"] += 1
+                ACTIVE_CONNECTIONS[session_id]["language"] = language
+                ACTIVE_CONNECTIONS[session_id]["last_activity"] = datetime.utcnow().isoformat() + "Z"
 
             # Track speaking analytics
             duration = payload.get("duration")
@@ -441,6 +469,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
         print(f"WebSocket Error: {e}", flush=True)
         traceback.print_exc()
     finally:
+        ACTIVE_CONNECTIONS.pop(session_id, None)
         print(f"Client {user_id} disconnected", flush=True)
         # Generate summary
         try:
