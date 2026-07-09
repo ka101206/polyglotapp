@@ -354,7 +354,11 @@ RULES:
 6. Do NOT ask the user for their name."""
 
         if token_mode == "low":
-            system_prompt = f"Scenario: {scenario_dict['title']}. Goal: {scenario_dict['goal']}.\n1. 100% {target_language} ONLY. Max 30 words.\n2. When goal reached, append [GOAL_REACHED]."
+            system_prompt = (
+                f"Scenario: {scenario_dict['title']}. You are the {scenario_dict['ai_role']}. Goal: {scenario_dict['goal']}\n"
+                f"1. Speak 100% in {target_language} ONLY. Max 30 words. Stay in character.\n"
+                f"2. VERY IMPORTANT: The moment the user achieves the goal ({scenario_dict['goal']}), you MUST append the exact string \"[GOAL_REACHED]\" to the END of your reply. Do not forget!"
+            )
 
         gender_rules = f"You are a {voice_gender}. Match your speaking style, tone, and self-referential pronouns to your gender ({voice_gender})."
         if target_language == "Japanese":

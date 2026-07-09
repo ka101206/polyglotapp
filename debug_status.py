@@ -133,7 +133,7 @@ async def check_internet() -> dict:
 # ---------------------------------------------------------------------------
 # Aggregate
 # ---------------------------------------------------------------------------
-async def collect_status(ai_client, tts_engine, connections=None) -> dict:
+async def collect_status(ai_client, tts_engine, connections=None, errors=None) -> dict:
     database = check_database()
     stt = check_stt()
     tts_japanese = check_tts_japanese(tts_engine)
@@ -165,6 +165,7 @@ async def collect_status(ai_client, tts_engine, connections=None) -> dict:
         },
         "checks": checks,
         "connections": connections or [],
+        "errors": errors or [],
     }
 
 
@@ -207,6 +208,12 @@ DEBUG_HTML = """<!doctype html>
   .badge.admin { background:#3b1d5e; color:#c4b5fd; }
   .badge.student { background:#0e3a4a; color:#7dd3fc; }
   .empty { color:#64748b; font-size:12px; padding:10px; }
+  .err { background:#1a1113; border:1px solid #7f1d1d; border-radius:8px; padding:10px 12px; margin-bottom:8px; }
+  .err .top { display:flex; justify-content:space-between; gap:10px; font-size:12px; }
+  .err .ctx { color:#fca5a5; font-weight:700; }
+  .err .when { color:#64748b; white-space:nowrap; }
+  .err .msg { color:#fecaca; font-size:12px; margin-top:4px; word-break:break-word; }
+  .err .tb { color:#7f8ea3; font-size:11px; margin-top:6px; white-space:pre-wrap; }
   button { background:#1f2937; color:#e6edf3; border:1px solid #374151; border-radius:8px;
            padding:6px 12px; font:inherit; cursor:pointer; }
   button:hover { background:#374151; }
@@ -228,6 +235,9 @@ DEBUG_HTML = """<!doctype html>
 
   <h3>Active connections (<span id="conncount">0</span>)</h3>
   <div id="conns"></div>
+
+  <h3>Recent errors (<span id="errcount">0</span>)</h3>
+  <div id="errs"></div>
 
 <script>
 const LABELS = {
@@ -269,6 +279,19 @@ function render(d){
     grid.appendChild(div);
   }
   renderConns(d.connections || []);
+  renderErrors(d.errors || []);
+}
+function renderErrors(errs){
+  document.getElementById('errcount').textContent = errs.length;
+  const el = document.getElementById('errs');
+  if (!errs.length){ el.innerHTML = '<div class="empty">No recent errors. 🎉</div>'; return; }
+  el.innerHTML = errs.map(e =>
+    '<div class="err">'+
+    '<div class="top"><span class="ctx">'+esc(e.context)+'</span><span class="when">'+new Date(e.timestamp).toLocaleTimeString()+' ('+ago(e.timestamp)+' ago)</span></div>'+
+    '<div class="msg">'+esc(e.error)+'</div>'+
+    (e.traceback && e.traceback.length ? '<div class="tb">'+esc(e.traceback.join('\\n'))+'</div>' : '')+
+    '</div>'
+  ).join('');
 }
 function ago(iso){
   const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime())/1000));

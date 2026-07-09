@@ -49,6 +49,20 @@ _kakasi = pykakasi.kakasi()  # Reuse a single instance
 # so multiple accounts (e.g. admin + student) can be watched at once.
 ACTIVE_CONNECTIONS: dict[str, dict] = {}
 
+# Ring buffer of recent runtime errors, surfaced on the debug dashboard so
+# per-request chat crashes are visible without tailing docker logs.
+from collections import deque
+RECENT_ERRORS: deque = deque(maxlen=25)
+
+def record_error(context: str, exc: Exception, user_id=None):
+    RECENT_ERRORS.appendleft({
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "context": context,
+        "user_id": user_id,
+        "error": f"{type(exc).__name__}: {exc}",
+        "traceback": traceback.format_exc().strip().splitlines()[-4:],
+    })
+
 # ---------- Auth ----------
 
 class AuthRequest(BaseModel):
@@ -127,7 +141,7 @@ def health():
 @app.get("/api/debug/status")
 async def debug_status():
     from debug_status import collect_status
-    return await collect_status(ai_client, tts_engine, list(ACTIVE_CONNECTIONS.values()))
+    return await collect_status(ai_client, tts_engine, list(ACTIVE_CONNECTIONS.values()), list(RECENT_ERRORS))
 
 @app.get("/debug", response_class=HTMLResponse)
 def debug_dashboard():
@@ -466,6 +480,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
     except WebSocketDisconnect:
         pass
     except Exception as e:
+        record_error(f"ws/chat user={user_id}", e, user_id)
         print(f"WebSocket Error: {e}", flush=True)
         traceback.print_exc()
     finally:
