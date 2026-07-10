@@ -242,9 +242,9 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
     }
   }, [messages, difficulty, user.forced_difficulty]);
 
-  const { isRecording, startRecording, stopRecording } = useMicrophone((text, duration, pronunciation) => {
-    sendMessage(text, duration, pronunciation);
-  }, silenceTimeout, language);
+  const { isRecording, startRecording, stopRecording } = useMicrophone((text, duration) => {
+    sendMessage(text, duration);
+  }, silenceTimeout, language, user.user_id);
 
   const handleMicClick = () => {
     if (isConversationMode) {
@@ -321,15 +321,6 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
 
         {/* Main Chat Area (Left Side) */}
         <div className="flex-1 flex flex-col relative">
-          <div className="absolute top-4 right-4 z-40">
-            <button 
-              onClick={() => setShowInbox(true)}
-              className="p-2 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-800 rounded-full backdrop-blur-sm shadow-sm transition-all flex items-center justify-center"
-              title="Inbox"
-            >
-              <InboxIcon size={20} />
-            </button>
-          </div>
           <div className="h-2 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0 z-10 w-full" />
           
           <MessageList 

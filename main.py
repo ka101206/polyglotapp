@@ -721,7 +721,7 @@ async def get_definition(payload: dict):
     return {"definition": definition}
 
 @app.post("/api/audio/transcribe")
-async def transcribe_audio(file: UploadFile = File(...), language: str = Form("Japanese"), user_id: int = Form(0)):
+async def transcribe_audio(file: UploadFile = File(...), language: str = Form("Japanese"), user_id: int = Form(0), silence_timeout: float = Form(2.5)):
     from stt_engine import STTEngine
     stt = STTEngine()
     audio_bytes = await file.read()
@@ -747,7 +747,7 @@ async def transcribe_audio(file: UploadFile = File(...), language: str = Form("J
     if stt.last_audio is not None:
         try:
             from audio_metrics import analyze_speech
-            speech = analyze_speech(stt.last_audio, stt.sample_rate, transcript=text, language=language)
+            speech = analyze_speech(stt.last_audio, stt.sample_rate, transcript=text, language=language, silence_timeout=silence_timeout)
         except Exception as e:
             print(f"Audio metrics error: {e}")
 

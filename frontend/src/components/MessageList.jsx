@@ -103,7 +103,7 @@ const MessageList = memo(function MessageList({
           <div className="flex items-center justify-between w-full">
             <div className="flex items-center gap-3">
                <span className="font-semibold text-slate-800 dark:text-slate-200 text-sm">{m.role === 'user' ? (user?.nickname || user?.username || 'You') : 'Polyglot AI'}</span>
-               {m.role === 'user' && ((m.grammar && m.grammar.replace(/[^a-zA-Z]/g, '').toUpperCase() !== 'PERFECT') || m.pronunciation) && (
+               {m.role === 'user' && (m.grammar && m.grammar.replace(/[^a-zA-Z]/g, '').toUpperCase() !== 'PERFECT') && (
                  <button 
                    onClick={() => setInlineFeedbackPopup(m)}
                    className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/10 text-amber-700 dark:text-amber-400 rounded-full border border-amber-500/30 dark:border-amber-500/20 hover:bg-amber-500/20 transition-colors text-[10px] font-bold tracking-wide uppercase shadow-sm"

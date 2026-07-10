@@ -159,38 +159,8 @@ export function InlineFeedbackPopup({
               {inlineFeedbackPopup.grammar}
             </div>
           )}
-          {(() => {
-            let parsed = null;
-            try {
-              parsed = typeof inlineFeedbackPopup.pronunciation === 'string'
-                ? JSON.parse(inlineFeedbackPopup.pronunciation)
-                : inlineFeedbackPopup.pronunciation;
-            } catch (e) { parsed = null; }
-            if (!parsed || (parsed.confidence === undefined && parsed.flow === undefined)) return null;
-            const bar = (label, val) => {
-              const color = val >= 80 ? 'bg-green-500' : val >= 55 ? 'bg-yellow-500' : 'bg-red-500';
-              return (
-                <div className="flex-1">
-                  <div className="flex justify-between text-xs mb-1"><span>{label}</span><span>{val}%</span></div>
-                  <div className="h-2 rounded-full bg-blue-500/15 overflow-hidden">
-                    <div className={`h-full ${color}`} style={{ width: `${Math.max(0, Math.min(100, val))}%` }}></div>
-                  </div>
-                </div>
-              );
-            };
-            return (
-              <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl text-blue-900 dark:text-blue-200/90 text-sm leading-relaxed font-medium">
-                <div className="text-blue-700 dark:text-blue-400 font-bold mb-3 uppercase tracking-wider text-xs flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-blue-600 dark:bg-blue-400"></div>
-                  Delivery
-                </div>
-                <div className="flex gap-4">
-                  {bar('Confidence', parsed.confidence ?? 0)}
-                  {bar('Flow', parsed.flow ?? 0)}
-                </div>
-              </div>
-            );
-          })()}
+          {/* Confidence/Flow are shown only in Analytics, not in this per-message
+              feedback popup. This popup surfaces grammar issues only. */}
 
           {tutorChatHistory.length > 0 && (
             <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-800 space-y-4">

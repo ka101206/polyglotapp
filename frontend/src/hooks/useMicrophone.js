@@ -94,6 +94,7 @@ export default function useMicrophone(onTranscription, silenceTimeoutSec = 2.5, 
         const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
         formData.append('file', audioBlob, `recording.${ext}`);
         formData.append('language', language);
+        formData.append('silence_timeout', silenceTimeoutSec.toString());
         if (userId !== null) {
           formData.append('user_id', userId.toString());
         }
@@ -106,7 +107,9 @@ export default function useMicrophone(onTranscription, silenceTimeoutSec = 2.5, 
           });
           const data = await res.json();
           if (data.text && onTranscription) {
-            onTranscription(data.text, duration, data.speech);
+            // Confidence/flow go to analytics only (saved server-side), NOT the
+            // per-message feedback popup — that popup is for grammar issues.
+            onTranscription(data.text, duration);
           }
         } catch (err) {
           console.error("Transcription error:", err);

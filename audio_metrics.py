@@ -33,8 +33,14 @@ def _tokens(transcript: str, language: str):
     return [w for w in transcript.split() if w.strip()]
 
 
-def analyze_speech(user_audio_np, sr, transcript: str = "", language: str = "Japanese") -> dict:
-    """Return {confidence, flow, drops:[{type, word, score}]} — all 0/empty on failure."""
+def analyze_speech(user_audio_np, sr, transcript: str = "", language: str = "Japanese",
+                   silence_timeout: float = 2.5) -> dict:
+    """Return {confidence, flow, drops:[{type, word, score}]} — all 0/empty on failure.
+
+    silence_timeout is the user's configured VAD pause tolerance (seconds). A
+    higher value means they intentionally allow more thinking time, so flow is
+    judged more leniently.
+    """
     empty = {"confidence": 0, "flow": 0, "drops": []}
     try:
         audio = np.asarray(user_audio_np).astype(np.float32)
@@ -76,8 +82,15 @@ def analyze_speech(user_audio_np, sr, transcript: str = "", language: str = "Jap
         def _forgive(v):
             return int(max(0, min(100, round(v * 1.08 + 8))))
 
+        # Higher silence-timeout setting => the user opted for more thinking time,
+        # so judge flow more leniently: tolerate longer pauses, penalize each less,
+        # and add a lift. tol = 1.0 at the 2.5s default, >1 = more forgiving.
+        tol = max(0.5, float(silence_timeout) / 2.5)
+        pause_thresh = 0.55 * tol
+        pause_penalty = 8.0 / tol
+        silence_penalty_mult = 80.0 / tol
+
         # --- Internal long pauses (hesitations between speech) ---
-        # Only clearly hesitant pauses (>= 0.55s) count against flow.
         long_pauses = []
         i = first
         while i <= last:
@@ -86,14 +99,15 @@ def analyze_speech(user_audio_np, sr, transcript: str = "", language: str = "Jap
                 while j <= last and not speech[j]:
                     j += 1
                 pause_dur = float(times[min(j, n - 1)] - times[i])
-                if pause_dur >= 0.55:
+                if pause_dur >= pause_thresh:
                     long_pauses.append((float(times[i]), pause_dur))
                 i = j
             else:
                 i += 1
 
         # --- Flow: penalize hesitation pauses and excessive silence (gently) ---
-        flow = 100.0 - len(long_pauses) * 8.0 - max(0.0, 0.4 - speech_ratio) * 80.0
+        flow = 100.0 - len(long_pauses) * pause_penalty - max(0.0, 0.4 - speech_ratio) * silence_penalty_mult
+        flow += max(0.0, float(silence_timeout) - 2.5) * 6.0   # extra lift for generous timeouts
         flow = _forgive(max(0.0, min(100.0, flow)))
 
         # --- Confidence: loudness adequacy + steadiness of the voice ---
