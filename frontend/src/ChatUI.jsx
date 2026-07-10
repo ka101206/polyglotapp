@@ -146,7 +146,7 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
   const fetchNotebook = async () => {
     try {
       const apiUrl = '';
-      const res = await fetch(`${apiUrl}/api/notebook?user_id=${user.user_id}`);
+      const res = await fetch(`${apiUrl}/api/notebook?user_id=${user.user_id}&requester_id=${user.user_id}`);
       const data = await res.json();
       setNotebook(data);
     } catch (e) {

@@ -768,9 +768,19 @@ async def transcribe_audio(file: UploadFile = File(...), language: str = Form("J
     return {"text": text, "speech": {"confidence": speech.get("confidence", 0), "flow": speech.get("flow", 0)}}
 
 @app.get("/api/notebook")
-async def get_notebook(user_id: int):
+async def get_notebook(user_id: int, requester_id: int | None = None):
     db = SessionLocal()
     try:
+        # Authorization: only the notebook's owner, or an admin of the owner's
+        # group, may read it.
+        if requester_id != user_id:
+            admin = db.query(User).filter(User.id == requester_id, User.is_admin == True).first()
+            if not admin:
+                raise HTTPException(status_code=403, detail="Not authorized to view this notebook")
+            target = db.query(User).filter(User.id == user_id).first()
+            if not target or (target.group and target.group.admin_id != requester_id):
+                raise HTTPException(status_code=404, detail="User not found in your group")
+
         vocab = db.query(Vocabulary).filter(Vocabulary.user_id == user_id).order_by(Vocabulary.first_seen_at.desc()).all()
         return [{"id": v.id, "word": v.word, "definition": v.definition, "next_review": v.next_review_date.isoformat() if v.next_review_date else None} for v in vocab]
     finally:

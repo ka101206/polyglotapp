@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, Settings, Clock, ChevronLeft, Plus, Search, CheckCircle, BarChart2, Trash2 } from 'lucide-react';
+import { Users, Settings, Clock, ChevronLeft, Plus, Search, CheckCircle, BarChart2, Trash2, BookOpen } from 'lucide-react';
 import AnalyticsDashboard from './AnalyticsDashboard';
 
 export default function AdminDashboard({ user, onBack }) {
@@ -13,6 +13,8 @@ export default function AdminDashboard({ user, onBack }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showUserAnalytics, setShowUserAnalytics] = useState(false);
+  const [showUserNotebook, setShowUserNotebook] = useState(false);
+  const [userNotebook, setUserNotebook] = useState([]);
   
   const [newUsername, setNewUsername] = useState('');
   const [settingsForm, setSettingsForm] = useState({
@@ -92,6 +94,20 @@ export default function AdminDashboard({ user, onBack }) {
       setSuccess(data.message || 'Invite sent to user!');
       setTimeout(() => setSuccess(''), 3000);
       setNewUsername('');
+    } catch (err) {
+      setError(err.message);
+    }
+    setLoading(false);
+  };
+
+  const loadNotebook = async (targetUserId) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${apiUrl}/api/notebook?user_id=${targetUserId}&requester_id=${user.user_id}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail);
+      setUserNotebook(data);
+      setShowUserNotebook(true);
     } catch (err) {
       setError(err.message);
     }
@@ -312,9 +328,10 @@ export default function AdminDashboard({ user, onBack }) {
                     <p className="text-xs text-slate-400 mt-1">Applies only to Japanese currently.</p>
                   </div>
                   
-                  <div className="flex items-center gap-3 mt-4">
+                  <div className="flex flex-wrap items-center gap-3 mt-4">
                     <button onClick={updateSettings} disabled={loading} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium">Save Settings</button>
                     <button onClick={() => setShowUserAnalytics(true)} className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center"><BarChart2 size={16} className="mr-2"/> View Analytics</button>
+                    <button onClick={() => loadNotebook(selectedUser.id)} className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center"><BookOpen size={16} className="mr-2"/> View Notebook</button>
                     {success && <span className="text-green-500 flex items-center text-sm"><CheckCircle size={16} className="mr-1"/> Saved</span>}
                   </div>
                 </div>
@@ -346,6 +363,30 @@ export default function AdminDashboard({ user, onBack }) {
       </div>
       {showUserAnalytics && selectedUser && (
         <AnalyticsDashboard user={{ user_id: selectedUser.id }} onClose={() => setShowUserAnalytics(false)} />
+      )}
+      {showUserNotebook && selectedUser && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/50">
+              <h2 className="text-xl font-bold flex items-center gap-2"><BookOpen className="text-indigo-500"/> {selectedUser.username}&apos;s Notebook</h2>
+              <button onClick={() => setShowUserNotebook(false)} className="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 p-2 font-bold text-lg">&times;</button>
+            </div>
+            <div className="p-4 flex-1 overflow-y-auto space-y-4">
+              {userNotebook.length === 0 ? (
+                <div className="text-center text-slate-500 py-8">Notebook is empty.</div>
+              ) : (
+                userNotebook.map(item => {
+                  return (
+                    <div key={item.id} className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                      <div className="font-bold text-blue-500 dark:text-blue-400 text-lg">{item.word}</div>
+                      <div className="text-sm text-slate-700 dark:text-slate-300 mt-2 whitespace-pre-wrap">{item.definition}</div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
