@@ -71,7 +71,13 @@ def analyze_speech(user_audio_np, sr, transcript: str = "", language: str = "Jap
         first = int(np.argmax(speech))
         last = n - 1 - int(np.argmax(speech[::-1]))
 
+        # A "bit more forgiving" final curve: lifts middling scores without
+        # letting genuinely poor delivery reach the top.
+        def _forgive(v):
+            return int(max(0, min(100, round(v * 1.08 + 8))))
+
         # --- Internal long pauses (hesitations between speech) ---
+        # Only clearly hesitant pauses (>= 0.55s) count against flow.
         long_pauses = []
         i = first
         while i <= last:
@@ -80,23 +86,23 @@ def analyze_speech(user_audio_np, sr, transcript: str = "", language: str = "Jap
                 while j <= last and not speech[j]:
                     j += 1
                 pause_dur = float(times[min(j, n - 1)] - times[i])
-                if pause_dur >= 0.4:
+                if pause_dur >= 0.55:
                     long_pauses.append((float(times[i]), pause_dur))
                 i = j
             else:
                 i += 1
 
-        # --- Flow: penalize hesitation pauses and excessive silence ---
-        flow = 100.0 - len(long_pauses) * 12.0 - max(0.0, 0.55 - speech_ratio) * 120.0
-        flow = int(max(0, min(100, flow)))
+        # --- Flow: penalize hesitation pauses and excessive silence (gently) ---
+        flow = 100.0 - len(long_pauses) * 8.0 - max(0.0, 0.4 - speech_ratio) * 80.0
+        flow = _forgive(max(0.0, min(100.0, flow)))
 
         # --- Confidence: loudness adequacy + steadiness of the voice ---
         voiced = rms[speech]
         mean_rms = float(np.mean(voiced))
-        loud = min(1.0, mean_rms / 0.08)                       # quiet/mumbled -> low
+        loud = min(1.0, mean_rms / 0.05)                       # easier to reach "loud enough"
         cv = float(np.std(voiced) / (mean_rms + 1e-6))         # wavering -> high
-        steady = max(0.0, 1.0 - cv)
-        confidence = int(max(0, min(100, (0.6 * loud + 0.4 * steady) * 100)))
+        steady = max(0.0, 1.0 - cv * 0.7)                      # soften the wavering penalty
+        confidence = _forgive((0.55 * loud + 0.45 * steady) * 100)
 
         # --- Locate drops and map to the nearest word ---
         toks = _tokens(transcript, language)

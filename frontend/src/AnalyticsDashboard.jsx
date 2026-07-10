@@ -15,6 +15,27 @@ function TrendBadge({ trend }) {
   );
 }
 
+function SubStat({ label, value, Icon, iconClass, trend }) {
+  const v = value ?? 0;
+  const barColor = v >= 80 ? 'bg-green-500' : v >= 55 ? 'bg-yellow-500' : 'bg-red-500';
+  return (
+    <div className="bg-white/60 dark:bg-slate-900/40 rounded-xl p-4 border border-slate-300/60 dark:border-slate-700/40">
+      <div className="flex items-center gap-2 mb-2 text-slate-600 dark:text-slate-300">
+        <Icon size={16} className={iconClass} />
+        <span className="text-sm font-medium">{label}</span>
+        {trend !== undefined && <TrendBadge trend={trend} />}
+      </div>
+      <div className="flex items-baseline gap-1 mb-2">
+        <span className="text-2xl font-bold text-black dark:text-white">{v}</span>
+        <span className="text-xs text-slate-500">/100</span>
+      </div>
+      <div className="h-2 rounded-full bg-slate-300/50 dark:bg-slate-700/50 overflow-hidden">
+        <div className={`h-full ${barColor}`} style={{ width: `${Math.max(0, Math.min(100, v))}%` }}></div>
+      </div>
+    </div>
+  );
+}
+
 export default function AnalyticsDashboard({ user, onClose }) {
   const [stats, setStats] = useState(null);
 
@@ -56,102 +77,71 @@ export default function AnalyticsDashboard({ user, onClose }) {
           {!stats ? (
             <div className="flex justify-center py-20 text-slate-500 animate-pulse">Loading analytics...</div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              
-              <div className="bg-slate-200 dark:bg-slate-800/50 rounded-2xl p-6 border border-slate-300 dark:border-slate-700/50">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center">
-                    <Clock size={24} />
-                  </div>
-                  <div>
-                    <p className="text-slate-600 dark:text-slate-400 text-sm font-medium">Total Speaking Time</p>
-                    <p className="text-2xl font-bold text-black dark:text-white">{stats.total_speaking_time_minutes} min</p>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+                <div className="bg-slate-200 dark:bg-slate-800/50 rounded-2xl p-6 border border-slate-300 dark:border-slate-700/50">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center">
+                      <Clock size={24} />
+                    </div>
+                    <div>
+                      <p className="text-slate-600 dark:text-slate-400 text-sm font-medium">Total Speaking Time</p>
+                      <p className="text-2xl font-bold text-black dark:text-white">{stats.total_speaking_time_minutes} min</p>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="bg-slate-200 dark:bg-slate-800/50 rounded-2xl p-6 border border-slate-300 dark:border-slate-700/50">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center">
-                    <AlertTriangle size={24} />
-                  </div>
-                  <div>
-                    <p className="text-slate-600 dark:text-slate-400 text-sm font-medium">Mistakes Corrected</p>
-                    <p className="text-2xl font-bold text-black dark:text-white">{stats.total_mistakes}</p>
+                <div className="bg-slate-200 dark:bg-slate-800/50 rounded-2xl p-6 border border-slate-300 dark:border-slate-700/50">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center">
+                      <AlertTriangle size={24} />
+                    </div>
+                    <div>
+                      <p className="text-slate-600 dark:text-slate-400 text-sm font-medium">Mistakes Corrected</p>
+                      <p className="text-2xl font-bold text-black dark:text-white">{stats.total_mistakes}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="bg-slate-200 dark:bg-slate-800/50 rounded-2xl p-6 border border-slate-300 dark:border-slate-700/50 md:col-span-2 lg:col-span-1">
-                <div className="flex items-center gap-4 mb-3">
-                  <div className="w-12 h-12 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center">
-                    <Activity size={24} />
-                  </div>
-                  <div>
-                    <p className="text-slate-600 dark:text-slate-400 text-sm font-medium">Fluency</p>
-                    <p className="text-2xl font-bold text-black dark:text-white">
-                      {stats.avg_fluency_score}/100
-                      <TrendBadge trend={stats.fluency_trend} />
-                    </p>
+                <div className="bg-slate-200 dark:bg-slate-800/50 rounded-2xl p-6 border border-slate-300 dark:border-slate-700/50">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                      <Ear size={24} />
+                    </div>
+                    <div>
+                      <p className="text-slate-600 dark:text-slate-400 text-sm font-medium">Listening Comprehension</p>
+                      <p className="text-2xl font-bold text-black dark:text-white">{stats.avg_listening_score}/100</p>
+                    </div>
                   </div>
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Avg of Confidence {stats.fluency_sub?.confidence ?? 0} · Flow {stats.fluency_sub?.flow ?? 0} · Grammar {stats.fluency_sub?.grammar ?? 0}
-                </p>
+
               </div>
 
-              <div className="bg-slate-200 dark:bg-slate-800/50 rounded-2xl p-6 border border-slate-300 dark:border-slate-700/50">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                    <MessageCircle size={24} />
+              {/* Fluency (parent) with its three sub-stats nested underneath */}
+              <div className="mt-6 bg-slate-200 dark:bg-slate-800/50 rounded-2xl p-6 border border-slate-300 dark:border-slate-700/50">
+                <div className="flex items-center justify-between flex-wrap gap-2 mb-5">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center">
+                      <Activity size={24} />
+                    </div>
+                    <div>
+                      <p className="text-slate-600 dark:text-slate-400 text-sm font-medium">Fluency</p>
+                      <p className="text-3xl font-bold text-black dark:text-white">
+                        {stats.avg_fluency_score}<span className="text-lg text-slate-500">/100</span>
+                        <TrendBadge trend={stats.fluency_trend} />
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-slate-600 dark:text-slate-400 text-sm font-medium">Grammar Score</p>
-                    <p className="text-2xl font-bold text-black dark:text-white">
-                      {stats.avg_grammar_score}/100
-                      <TrendBadge trend={stats.grammar_trend} />
-                    </p>
-                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Average of the three sub-stats below (33% each)</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <SubStat label="Confidence" value={stats.fluency_sub?.confidence} Icon={Volume2} iconClass="text-pink-400" />
+                  <SubStat label="Flow" value={stats.fluency_sub?.flow} Icon={Wind} iconClass="text-cyan-400" />
+                  <SubStat label="Grammar" value={stats.fluency_sub?.grammar} Icon={MessageCircle} iconClass="text-emerald-400" trend={stats.grammar_trend} />
                 </div>
               </div>
-
-              <div className="bg-slate-200 dark:bg-slate-800/50 rounded-2xl p-6 border border-slate-300 dark:border-slate-700/50">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
-                    <Ear size={24} />
-                  </div>
-                  <div>
-                    <p className="text-slate-600 dark:text-slate-400 text-sm font-medium">Listening Comprehension</p>
-                    <p className="text-2xl font-bold text-black dark:text-white">{stats.avg_listening_score}/100</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-slate-200 dark:bg-slate-800/50 rounded-2xl p-6 border border-slate-300 dark:border-slate-700/50">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-pink-500/20 text-pink-400 flex items-center justify-center">
-                    <Volume2 size={24} />
-                  </div>
-                  <div>
-                    <p className="text-slate-600 dark:text-slate-400 text-sm font-medium">Confidence <span className="text-[10px] opacity-60">(sub of Fluency)</span></p>
-                    <p className="text-2xl font-bold text-black dark:text-white">{stats.avg_confidence_score}/100</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-slate-200 dark:bg-slate-800/50 rounded-2xl p-6 border border-slate-300 dark:border-slate-700/50">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
-                    <Wind size={24} />
-                  </div>
-                  <div>
-                    <p className="text-slate-600 dark:text-slate-400 text-sm font-medium">Flow <span className="text-[10px] opacity-60">(sub of Fluency)</span></p>
-                    <p className="text-2xl font-bold text-black dark:text-white">{stats.avg_flow_score}/100</p>
-                  </div>
-                </div>
-              </div>
-
-            </div>
+            </>
           )}
 
           {stats && stats.weak_points && (
