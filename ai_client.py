@@ -1,6 +1,7 @@
 # ai_client.py
 import os
 import re
+import asyncio
 from openai import AsyncOpenAI
 import config
 
