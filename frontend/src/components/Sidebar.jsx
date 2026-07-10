@@ -62,7 +62,7 @@ export default function Sidebar({
           </div>
           <div className="min-w-0">
             <h2 className="font-semibold truncate">{user.nickname || user.username}</h2>
-            <p className="text-[10px] text-slate-600 dark:text-slate-400">Polyglot Student</p>
+            <p className="text-[10px] text-slate-600 dark:text-slate-400">{user.is_admin ? "Admin" : "Polyglot Student"}</p>
           </div>
         </div>
         <div className="relative shrink-0 flex items-center gap-1">
@@ -80,6 +80,12 @@ export default function Sidebar({
           </button>
           {showDropdown && (
             <div className="absolute right-0 top-full mt-2 w-48 bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden py-1 z-50">
+              <button 
+                onClick={() => { setShowInbox(true); setShowDropdown(false); }}
+                className="w-full px-4 py-2 text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 hover:text-black dark:hover:text-white flex items-center gap-2 transition-colors"
+              >
+                <InboxIcon size={16} /> Inbox
+              </button>
               <button 
                 onClick={() => { setShowSettings(true); setShowDropdown(false); }}
                 className="w-full px-4 py-2 text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 hover:text-black dark:hover:text-white flex items-center gap-2 transition-colors"
