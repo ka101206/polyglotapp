@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Clock, AlertTriangle, MessageCircle, Ear, Activity, Volume2, Wind, Target, TrendingUp, TrendingDown } from 'lucide-react';
+import { useTranslation } from './i18n';
 
 function TrendBadge({ trend }) {
+  const { t } = useTranslation();
   if (trend === null || trend === undefined) return null;
   const isPositive = trend > 0;
   const isNeutral = trend === 0;
-  if (isNeutral) return <span className="text-xs text-slate-400 ml-2">→ No change</span>;
+  if (isNeutral) return <span className="text-xs text-slate-400 ml-2">→ {t('noChange')}</span>;
   return (
     <span className={`inline-flex items-center gap-0.5 text-xs font-medium ml-2 px-1.5 py-0.5 rounded-full ${isPositive ? 'bg-green-500/15 text-green-400' : 'bg-red-500/15 text-red-400'}`}>
       {isPositive ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
@@ -37,6 +39,7 @@ function SubStat({ label, value, Icon, iconClass, trend }) {
 }
 
 export default function AnalyticsDashboard({ user, onClose }) {
+  const { t } = useTranslation();
   const [stats, setStats] = useState(null);
 
   useEffect(() => {
@@ -62,8 +65,8 @@ export default function AnalyticsDashboard({ user, onClose }) {
       >
         <div className="px-8 py-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-200 dark:bg-slate-800/30">
           <div>
-            <h2 className="text-2xl font-bold text-black dark:text-white tracking-tight">Analytics Overview</h2>
-            <p className="text-slate-600 dark:text-slate-400 mt-1">Track your language learning progress</p>
+            <h2 className="text-2xl font-bold text-black dark:text-white tracking-tight">{t('analyticsOverview')}</h2>
+            <p className="text-slate-600 dark:text-slate-400 mt-1">{t('analyticsSubtitle')}</p>
           </div>
           <button 
             onClick={onClose}
@@ -75,7 +78,7 @@ export default function AnalyticsDashboard({ user, onClose }) {
 
         <div className="p-8 overflow-y-auto">
           {!stats ? (
-            <div className="flex justify-center py-20 text-slate-500 animate-pulse">Loading analytics...</div>
+            <div className="flex justify-center py-20 text-slate-500 animate-pulse">{t('loadingAnalytics')}</div>
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -86,8 +89,8 @@ export default function AnalyticsDashboard({ user, onClose }) {
                       <Clock size={24} />
                     </div>
                     <div>
-                      <p className="text-slate-600 dark:text-slate-400 text-sm font-medium">Total Speaking Time</p>
-                      <p className="text-2xl font-bold text-black dark:text-white">{stats.total_speaking_time_minutes} min</p>
+                      <p className="text-slate-600 dark:text-slate-400 text-sm font-medium">{t('totalSpeakingTime')}</p>
+                      <p className="text-2xl font-bold text-black dark:text-white">{stats.total_speaking_time_minutes} {t('minutesShort')}</p>
                     </div>
                   </div>
                 </div>
@@ -98,7 +101,7 @@ export default function AnalyticsDashboard({ user, onClose }) {
                       <AlertTriangle size={24} />
                     </div>
                     <div>
-                      <p className="text-slate-600 dark:text-slate-400 text-sm font-medium">Mistakes Corrected</p>
+                      <p className="text-slate-600 dark:text-slate-400 text-sm font-medium">{t('mistakesCorrected')}</p>
                       <p className="text-2xl font-bold text-black dark:text-white">{stats.total_mistakes}</p>
                     </div>
                   </div>
@@ -110,7 +113,7 @@ export default function AnalyticsDashboard({ user, onClose }) {
                       <Ear size={24} />
                     </div>
                     <div>
-                      <p className="text-slate-600 dark:text-slate-400 text-sm font-medium">Listening Comprehension</p>
+                      <p className="text-slate-600 dark:text-slate-400 text-sm font-medium">{t('listeningComprehension')}</p>
                       <p className="text-2xl font-bold text-black dark:text-white">{stats.avg_listening_score}/100</p>
                     </div>
                   </div>
@@ -126,19 +129,19 @@ export default function AnalyticsDashboard({ user, onClose }) {
                       <Activity size={24} />
                     </div>
                     <div>
-                      <p className="text-slate-600 dark:text-slate-400 text-sm font-medium">Fluency</p>
+                      <p className="text-slate-600 dark:text-slate-400 text-sm font-medium">{t('fluency')}</p>
                       <p className="text-3xl font-bold text-black dark:text-white">
                         {stats.avg_fluency_score}<span className="text-lg text-slate-500">/100</span>
                         <TrendBadge trend={stats.fluency_trend} />
                       </p>
                     </div>
                   </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Average of the three sub-stats below (33% each)</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{t('fluencySubtitle')}</p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <SubStat label="Confidence" value={stats.fluency_sub?.confidence} Icon={Volume2} iconClass="text-pink-400" />
-                  <SubStat label="Flow" value={stats.fluency_sub?.flow} Icon={Wind} iconClass="text-cyan-400" />
-                  <SubStat label="Grammar" value={stats.fluency_sub?.grammar} Icon={MessageCircle} iconClass="text-emerald-400" trend={stats.grammar_trend} />
+                  <SubStat label={t('confidence')} value={stats.fluency_sub?.confidence} Icon={Volume2} iconClass="text-pink-400" />
+                  <SubStat label={t('flow')} value={stats.fluency_sub?.flow} Icon={Wind} iconClass="text-cyan-400" />
+                  <SubStat label={t('grammarStat')} value={stats.fluency_sub?.grammar} Icon={MessageCircle} iconClass="text-emerald-400" trend={stats.grammar_trend} />
                 </div>
               </div>
             </>
@@ -148,20 +151,20 @@ export default function AnalyticsDashboard({ user, onClose }) {
             <div className="mt-8">
               <div className="flex items-center gap-2 mb-4 text-slate-700 dark:text-slate-300">
                 <Target size={18} />
-                <h3 className="text-lg font-bold">Weak Points to Work On</h3>
+                <h3 className="text-lg font-bold">{t('weakPointsTitle')}</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {[
-                  { key: 'grammar', label: 'Grammar', color: 'emerald' },
-                  { key: 'flow', label: 'Flow (choppy words)', color: 'cyan' },
-                  { key: 'confidence', label: 'Confidence (weak sounds)', color: 'pink' },
+                  { key: 'grammar', label: t('grammarStat'), color: 'emerald' },
+                  { key: 'flow', label: t('weakFlowLabel'), color: 'cyan' },
+                  { key: 'confidence', label: t('weakConfidenceLabel'), color: 'pink' },
                 ].map(({ key, label }) => {
                   const items = stats.weak_points[key] || [];
                   return (
                     <div key={key} className="bg-slate-200 dark:bg-slate-800/50 rounded-2xl p-5 border border-slate-300 dark:border-slate-700/50">
                       <p className="text-slate-600 dark:text-slate-400 text-sm font-semibold mb-3">{label}</p>
                       {items.length === 0 ? (
-                        <p className="text-slate-400 dark:text-slate-500 text-sm">No data yet</p>
+                        <p className="text-slate-400 dark:text-slate-500 text-sm">{t('noDataYet')}</p>
                       ) : (
                         <ul className="space-y-2">
                           {items.map((it, i) => (

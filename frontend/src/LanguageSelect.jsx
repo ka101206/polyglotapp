@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Globe, Shield, Inbox as InboxIcon } from 'lucide-react';
 import Inbox from './Inbox';
+import { useTranslation } from './i18n';
 
 const LANGUAGES = [
   { value: 'Japanese', label: '日本語', sub: 'Japanese' },
@@ -10,9 +11,11 @@ const LANGUAGES = [
   { value: 'Spanish', label: 'Español', sub: 'Spanish' },
   { value: 'French', label: 'Français', sub: 'French' },
   { value: 'Italian', label: 'Italiano', sub: 'Italian' },
+  { value: 'English', label: 'English', sub: 'English' },
 ];
 
 export default function LanguageSelect({ user, onSelect, onAdminClick }) {
+  const { t } = useTranslation();
   const [showInbox, setShowInbox] = useState(false);
 
   return (
@@ -22,7 +25,7 @@ export default function LanguageSelect({ user, onSelect, onAdminClick }) {
           onClick={() => setShowInbox(true)}
           className="flex items-center gap-2 px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-full hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors shadow-sm"
         >
-          <InboxIcon size={20} /> <span className="font-medium text-sm">Inbox</span>
+          <InboxIcon size={20} /> <span className="font-medium text-sm">{t('inbox')}</span>
         </button>
       </div>
 
@@ -38,9 +41,9 @@ export default function LanguageSelect({ user, onSelect, onAdminClick }) {
             <Globe size={32} />
           </div>
           <h2 className="text-3xl font-bold text-black dark:text-white tracking-tight">
-            Welcome, {user.nickname || user.username}
+            {t('welcome', { name: user.nickname || user.username })}
           </h2>
-          <p className="text-slate-600 dark:text-slate-400 mt-2">What would you like to practice today?</p>
+          <p className="text-slate-600 dark:text-slate-400 mt-2">{t('whatToPractice')}</p>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -65,7 +68,7 @@ export default function LanguageSelect({ user, onSelect, onAdminClick }) {
               onClick={onAdminClick}
               className="flex items-center px-4 py-2 bg-slate-300 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-400 dark:hover:bg-slate-700 rounded-lg text-sm font-medium transition-colors"
             >
-              <Shield size={16} className="mr-2 text-indigo-500" /> Admin Dashboard
+              <Shield size={16} className="mr-2 text-indigo-500" /> {t('adminDashboard')}
             </button>
           </div>
         )}

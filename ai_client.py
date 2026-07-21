@@ -27,6 +27,7 @@ class AIClient:
         
         self.grammar_cache = {}
         self.word_bank_cache = {}
+        self.kana_cache = {}  # Japanese text -> hiragana reading (for TTS)
 
     # ---------- Shared helpers ----------
 
@@ -38,29 +39,55 @@ class AIClient:
         self.conversation_history = []
         self.scenario_history = []
 
-    def _cleanup_text(self, text):
+    # Regex matching each target language's native script. Used to detect where
+    # the actual reply begins (vs. any leftover reasoning preamble).
+    _NATIVE_SCRIPT_PATTERNS = {
+        "Japanese": r'[぀-ゟ゠-ヿ一-龯]',
+        "Chinese":  r'[一-龯]',
+        "Korean":   r'[가-힣ᄀ-ᇿ]',
+        "Spanish":  r'[A-Za-zÀ-ſ]',
+        "French":   r'[A-Za-zÀ-ſ]',
+        "Italian":  r'[A-Za-zÀ-ſ]',
+        "English":  r'[A-Za-z]',
+    }
+    _LATIN_LANGUAGES = ("Spanish", "French", "Italian", "English")
+
+    def _cleanup_text(self, text, language="Japanese"):
         text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
         text = re.sub(r'(?is)Here\'s a thinking process.*?</think>', '', text)
         text = re.sub(r'(?is)Here\'s a thinking process.*?✅\s*', '', text)
         text = re.sub(r'\[GOAL_REACHED\]', '', text, flags=re.IGNORECASE)
         text = re.sub(r'(?is)Here\'s a thinking process.*?(?=(?:こんにちは|承知|分かり|はい|いいえ|もちろん|そうですね|よろしく|初めまして|[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]))', '', text)
-        # Catch any lines starting with numbers, bullet points, or English reasoning phrases
+        native = self._NATIVE_SCRIPT_PATTERNS.get(language, self._NATIVE_SCRIPT_PATTERNS["Japanese"])
+        latin_script = language in self._LATIN_LANGUAGES
+
+        # Reasoning/meta lines to strip from the preamble. For Latin-script target
+        # languages the reply's native script IS Latin (same as any reasoning),
+        # so we must NOT strip on a leading digit \u2014 a real reply can start with a
+        # number (e.g. "10 dollars, please."). We only strip explicit meta phrases
+        # and bullet markers there. CJK targets keep the stricter digit stripping.
+        if latin_script:
+            reasoning_re = r"(?i)^(?:[\-\*\u2022]\s|(?:Here'?s|Here is|Okay|Alright|Sure, here|Analyze|Identify|Determine|Draft|Final Check|Checking|Let me|First,|Step \d)\b)"
+        else:
+            reasoning_re = r"^[\d\.\-\*]|Here's|Analyze|Identify|Determine|Draft|Final Check|Checking"
+
         lines = text.split('\n')
         cleaned = []
         in_reasoning = True
         for l in lines:
-            if not l.strip():
+            stripped = l.strip()
+            if not stripped:
                 continue
-            
-            # If we see Japanese characters, we've likely hit the actual reply
-            if re.search(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]', l):
-                in_reasoning = False
-            
-            if not in_reasoning:
-                cleaned.append(l.strip())
-            elif not re.match(r'^[\d\.\-\*]|Here\'s|Analyze|Identify|Determine|Draft|Final Check|Checking', l.strip()):
-                # Sometimes a line might not match our exact heuristic but is still part of the reply
-                cleaned.append(l.strip())
+
+            # Drop meta/reasoning preamble lines. For CJK targets, a line that
+            # already contains native script is treated as the real reply even if
+            # it matches the pattern (e.g. "1. \u79C1\u306F\u2026"); for Latin targets we can't
+            # use native script to disambiguate, so rely on the pattern alone.
+            if in_reasoning and re.match(reasoning_re, stripped) and (latin_script or not re.search(native, stripped)):
+                continue
+
+            in_reasoning = False
+            cleaned.append(stripped)
 
         reply = " ".join(cleaned)
         reply = re.sub(r'^[。・•\-\*]\s*', '', reply)
@@ -84,7 +111,7 @@ class AIClient:
                 or "")
         return text.strip()
 
-    async def _stream_sentences(self, messages, temperature=0.2, max_tokens=150):
+    async def _stream_sentences(self, messages, temperature=0.2, max_tokens=150, language="Japanese"):
         """Async generator that yields (text_delta, sentence_text, full_reply, success, is_done, extras)."""
         try:
             stream = await self.client.chat.completions.create(
@@ -119,7 +146,7 @@ class AIClient:
                     full_text += token
 
                     reply_part = full_text
-                    safe_reply = self._cleanup_text(reply_part)
+                    safe_reply = self._cleanup_text(reply_part, language)
                     
                     last_bracket = safe_reply.rfind("[")
                     if last_bracket != -1 and safe_reply.find("]", last_bracket) == -1:
@@ -236,7 +263,10 @@ Rules:
         if token_mode == "low":
             system_prompt = f"Role: Native {target_language} speaker.\nRules: <30 words. Register: {register} ({lang[register]}). Script: {lang['script']}."
         
-        system_prompt += f"\nCRITICAL: You MUST answer strictly in {target_language}. Do NOT use English conversational fillers (like 'WELL', 'OH', etc.). ONLY output {target_language} text."
+        if target_language == "English":
+            system_prompt += "\nCRITICAL: You MUST answer strictly in natural, idiomatic English. ONLY output English text."
+        else:
+            system_prompt += f"\nCRITICAL: You MUST answer strictly in {target_language}. Do NOT use English conversational fillers (like 'WELL', 'OH', etc.). ONLY output {target_language} text."
 
         gender_rules = f"You are a {voice_gender}. Match your speaking style, tone, and self-referential pronouns to your gender ({voice_gender})."
         if target_language == "Japanese":
@@ -285,12 +315,12 @@ Rules:
         # --- END TEMP DEBUG ---
 
         full = ""
-        async for delta, sentence, full_reply, ok, done, extras in self._stream_sentences(messages, temperature=0.5):
+        async for delta, sentence, full_reply, ok, done, extras in self._stream_sentences(messages, temperature=0.5, language=target_language):
             full = full_reply
-            
+
             if done and ok:
                 self.conversation_history.append({"role": "user", "content": user_text})
-                self.conversation_history.append({"role": "assistant", "content": self._cleanup_text(full)})
+                self.conversation_history.append({"role": "assistant", "content": self._cleanup_text(full, target_language)})
                 
                 if token_mode == "low":
                     if len(self.conversation_history) > 4:
@@ -349,7 +379,7 @@ User is: {scenario_dict['user_role']}. Goal: {scenario_dict['goal']}
 RULES:
 1. Stay in character.
 2. FORMALITY: Default to polite register. If the user speaks casually (e.g. plain-form verbs, no です/ます, 반말, etc.), match their casual tone immediately.
-3. ABSOLUTE LANGUAGE RULE: Speak 100% ONLY in {target_language}. NO Romaji. NO Pinyin. NO English (except acronyms like OK). Write ONLY in the native script of {target_language}. For Japanese: no Chinese Hanzi—use only Japanese Kanji.
+3. ABSOLUTE LANGUAGE RULE: {"Speak 100% ONLY in natural, idiomatic English." if target_language == "English" else f"Speak 100% ONLY in {target_language}. NO Romaji. NO Pinyin. NO English (except acronyms like OK). Write ONLY in the native script of {target_language}. For Japanese: no Chinese Hanzi—use only Japanese Kanji."}
 4. Max 30 words. {handholding} Speak like a true native. Use natural, native, and idiomatic phrasing. Avoid redundant, weird, or overly explicit translated phrases (e.g. say "steak", not "meat steak").
 5. VERY IMPORTANT: The moment the user achieves the goal ({scenario_dict['goal']}), you MUST append the exact string "[GOAL_REACHED]" to the END of your reply. Do not forget!
 6. Do NOT ask the user for their name."""
@@ -382,11 +412,11 @@ Output ONLY your conversational reply (and the [GOAL_REACHED] tag if the goal is
         messages.extend(self.scenario_history)
 
         full = ""
-        async for delta, sentence, full_reply, ok, done, extras in self._stream_sentences(messages):
+        async for delta, sentence, full_reply, ok, done, extras in self._stream_sentences(messages, language=target_language):
             full = full_reply
             
             if done and ok:
-                self.scenario_history.append({"role": "assistant", "content": self._cleanup_text(full)})
+                self.scenario_history.append({"role": "assistant", "content": self._cleanup_text(full, target_language)})
                 if token_mode == "low":
                     if len(self.scenario_history) > 4:
                         self.scenario_history = self.scenario_history[-4:]
@@ -460,6 +490,37 @@ User: "안녕하세요" → PERFECT"""
         except Exception:
             return None
 
+    # ---------- Japanese reading for TTS ----------
+
+    async def to_kana(self, text):
+        """Convert Japanese text to its hiragana reading using the LLM (context-aware,
+        so it handles homographs, rare kanji, and proper nouns that OpenJTalk's TTS
+        dictionary misreads — e.g. 呪術廻戦 -> じゅじゅつかいせん). Cached. Returns the
+        hiragana string, or None if conversion looks unreliable (caller falls back
+        to the original text)."""
+        text = (text or "").strip()
+        if not text:
+            return None
+        if text in self.kana_cache:
+            return self.kana_cache[text]
+        try:
+            out = await self._complete(
+                [
+                    {"role": "system", "content": "Convert the Japanese text to its hiragana reading. Output ONLY hiragana and the original punctuation — no kanji, no katakana loanword spelling changes, no romaji, no explanation. Keep it a faithful reading of the input."},
+                    {"role": "user", "content": text},
+                ],
+                temperature=0.0, max_tokens=120,
+            )
+            out = (out or "").strip()
+            # Sanity: must contain kana and must not still contain kanji, else the
+            # conversion failed — fall back to the original text.
+            if out and re.search(r"[぀-ゟ゠-ヿ]", out) and not re.search(r"[一-龯]", out):
+                self.kana_cache[text] = out
+                return out
+        except Exception:
+            pass
+        return None
+
     # ---------- Definitions ----------
 
     # Per-language instruction for the notebook "Reading" line.
@@ -470,28 +531,82 @@ User: "안녕하세요" → PERFECT"""
         "Chinese": "the reading in pinyin, with tone marks.",
         # Korean: Latin-alphabet romanization (Revised Romanization).
         "Korean": "the reading romanized in the Latin alphabet (Revised Romanization of Korean).",
+        # Latin-script languages: IPA pronunciation.
+        "English": "the pronunciation in IPA (International Phonetic Alphabet), e.g. /bəˈnɑːnə/",
+        "Spanish": "the pronunciation in IPA (International Phonetic Alphabet)",
+        "French": "the pronunciation in IPA (International Phonetic Alphabet)",
+        "Italian": "the pronunciation in IPA (International Phonetic Alphabet)",
+    }
+
+    # Per-language extra annotation line for the notebook: (Label, instruction).
+    # Parsed and rendered above the reading on the frontend. Keep the Label a
+    # single English word — the frontend maps it to a localized display label.
+    ANNOTATION_INSTRUCTIONS = {
+        # Japanese: standard Tokyo-dialect pitch accent.
+        "Japanese": ("Pitch", "the standard Tokyo-dialect pitch-accent pattern as the accent type and drop position, e.g. '平板 [0]', '頭高 [1]', '中高 [2]', '尾高 [3]'"),
+        # Chinese: tone number of each syllable.
+        "Chinese": ("Tone", "the tone number of each syllable separated by hyphens (1-4, or 0/5 for neutral), e.g. '3-3', '4-1', '2-0'"),
+        # English: which syllable carries primary stress.
+        "English": ("Stress", "the word split into syllables with the STRESSED syllable in CAPITAL letters, e.g. 'ba-NA-na', 'COM-pu-ter'"),
+        # Romance languages: grammatical gender of nouns.
+        "Spanish": ("Gender", "if the word is a noun, its grammatical gender with definite article (el = masculine, la = feminine), e.g. 'la (feminine)'; otherwise write N/A"),
+        "French": ("Gender", "if the word is a noun, its grammatical gender with definite article (le = masculine, la = feminine), e.g. 'le (masculine)'; otherwise write N/A"),
+        "Italian": ("Gender", "if the word is a noun, its grammatical gender with definite article (il/lo = masculine, la = feminine), e.g. 'la (feminine)'; otherwise write N/A"),
     }
 
     async def get_definition(self, word, context, target_language):
         reading_instruction = self.READING_INSTRUCTIONS.get(
             target_language, "the pronunciation. If not applicable, write N/A"
         )
+        annotation = self.ANNOTATION_INSTRUCTIONS.get(target_language)
+        fmt_lines = [f"Reading: <{reading_instruction}>"]
+        # Japanese pitch accent is computed locally from OpenJTalk (dictionary-grade),
+        # so we don't ask the LLM for it — it's injected after the response instead.
+        if annotation and target_language != "Japanese":
+            fmt_lines.append(f"{annotation[0]}: <{annotation[1]}>")
+        fmt_lines.append("<A short, concise definition in English>")
+        fmt = "\n".join(fmt_lines)
         system_prompt = f"""You are a {target_language} dictionary.
 Given the word '{word}' and the context '{context}', provide its meaning in English.
 Format your response exactly like this:
-Reading: <{reading_instruction}>
-<A short, concise definition in English>"""
+{fmt}"""
         try:
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Define '{word}' in the context of: {context}"}
             ]
-            response = await self._complete(messages, temperature=0.1, max_tokens=100)
-            if response:
-                return response.strip()
-            return "Definition not available."
+            response = await self._complete(messages, temperature=0.1, max_tokens=160)
+            if not response:
+                return "Definition not available."
+            response = response.strip()
+            if target_language == "Japanese":
+                response = self._inject_japanese_pitch(word, response)
+            return response
         except Exception:
             return "Definition not available."
+
+    @staticmethod
+    def _inject_japanese_pitch(word, text):
+        """Replace/insert the notebook 'Pitch:' line with the OpenJTalk-computed
+        pitch accent, placed right after the 'Reading:' line."""
+        try:
+            from jp_pitch import get_pitch_accent
+            pitch = get_pitch_accent(word)
+        except Exception:
+            pitch = None
+        if not pitch:
+            return text
+        # Drop any model-provided Pitch line, then insert our own after Reading.
+        lines = [l for l in text.split("\n") if not re.match(r"^\s*Pitch\s*:", l, re.I)]
+        out, inserted = [], False
+        for l in lines:
+            out.append(l)
+            if not inserted and re.match(r"^\s*Reading\s*:", l, re.I):
+                out.append(f"Pitch: {pitch}")
+                inserted = True
+        if not inserted:
+            out.insert(0, f"Pitch: {pitch}")
+        return "\n".join(out)
     # ---------- Word Bank ----------
 
     async def generate_word_bank(self, reply_text, target_language, include_decoys=False, token_mode="high"):
@@ -500,8 +615,9 @@ Reading: <{reading_instruction}>
             return self.word_bank_cache[cache_key], True
 
         count = 15 if include_decoys else 10
+        script_rule = "" if target_language == "English" else " (NO CHINESE HANZI, NO ENGLISH)"
         sp = f"""You are a helpful language tutor.
-Provide exactly {count} useful vocabulary words in {target_language} (NO CHINESE HANZI, NO ENGLISH) that the user could use to reply.
+Provide exactly {count} useful vocabulary words in {target_language}{script_rule} that the user could use to reply.
 Mix nouns, verbs, particles, and punctuation. Do NOT use Romaji/Pinyin. Output ONLY the {target_language} comma-separated list, nothing else."""
         user_msg = f"Based on this text from the AI: '{reply_text}'"
         try:

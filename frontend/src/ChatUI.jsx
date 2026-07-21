@@ -11,8 +11,10 @@ import SettingsModal from './components/SettingsModal';
 import { SelectionToolbar, DefinitionPopup, InlineFeedbackPopup } from './components/Popups';
 import Inbox from './Inbox';
 import SRSReviewModal from './components/SRSReviewModal';
+import { useTranslation } from './i18n';
 
 export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDarkMode, setIsDarkMode, onAdminClick }) {
+  const { t } = useTranslation();
   const [language, setLanguage] = useState(() => {
     if (initialLanguage) return initialLanguage;
     if (user?.is_admin) return 'None';
@@ -206,7 +208,7 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
   const prevLangRef = useRef(language);
   useEffect(() => {
     if (prevLangRef.current !== language) {
-      setMessages(prev => [...prev, { role: 'system', content: `Language switched to ${language}` }]);
+      setMessages(prev => [...prev, { role: 'system', content: t('languageSwitched', { language }) }]);
       prevLangRef.current = language;
     }
   }, [language]);
@@ -233,10 +235,10 @@ export default function ChatUI({ user, initialLanguage, onLogout, setUser, isDar
         
         if (errorCount === 3 && currIdx > 0 && !user.forced_difficulty) {
            setDifficulty(levels[currIdx - 1]);
-           setMessages(prev => [...prev, { role: 'system', content: `Adaptive Leveling: Lowered difficulty to ${levels[currIdx - 1]} to provide more scaffolding.` }]);
+           setMessages(prev => [...prev, { role: 'system', content: t('adaptiveLowered', { level: levels[currIdx - 1] }) }]);
         } else if (perfectCount === 3 && currIdx !== -1 && currIdx < levels.length - 1 && !user.forced_difficulty) {
            setDifficulty(levels[currIdx + 1]);
-           setMessages(prev => [...prev, { role: 'system', content: `Adaptive Leveling: Raised difficulty to ${levels[currIdx + 1]} based on excellent performance.` }]);
+           setMessages(prev => [...prev, { role: 'system', content: t('adaptiveRaised', { level: levels[currIdx + 1] }) }]);
         }
       }
     }

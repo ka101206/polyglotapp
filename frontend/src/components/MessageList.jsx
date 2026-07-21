@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
 import { motion } from 'framer-motion';
 import { AlertTriangle, User } from 'lucide-react';
+import { useTranslation } from '../i18n';
 
 const MessageList = memo(function MessageList({
   user,
@@ -13,6 +14,7 @@ const MessageList = memo(function MessageList({
   messagesEndRef,
   showTokens
 }) {
+  const { t } = useTranslation();
   const handleMouseUp = (e) => {
     const selection = window.getSelection().toString().trim();
     if (selection) {
@@ -53,10 +55,10 @@ const MessageList = memo(function MessageList({
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
                 </span>
-                Active Scenario: {m.id}
+                {t('activeScenario')}: {m.id}
               </div>
               <div className="text-sm font-medium text-blue-900 dark:text-blue-100 flex items-start gap-2">
-                <span className="text-blue-700 dark:text-blue-400 font-bold">Goal:</span> {m.goal}
+                <span className="text-blue-700 dark:text-blue-400 font-bold">{t('goalLabel')}:</span> {m.goal}
               </div>
             </div>
             {m.messages.map((sMsg, j) => renderMessage(sMsg, `${keyStr}-${j}`))}
@@ -68,9 +70,9 @@ const MessageList = memo(function MessageList({
             <summary className="p-4 font-bold text-slate-700 dark:text-slate-300 cursor-pointer hover:bg-slate-300 dark:bg-slate-700/50 transition-colors flex items-center justify-between outline-none">
               <span className="flex items-center gap-3">
                 <div className="w-6 h-6 rounded-full bg-green-500/20 text-green-600 dark:text-green-400 flex items-center justify-center text-xs border border-green-500/30">✓</div>
-                Completed: {m.id}
+                {t('completedLabel')}: {m.id}
               </span>
-              <span className="text-xs font-semibold text-slate-500 bg-slate-200 dark:bg-slate-800/80 px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700">{m.messages.length} messages</span>
+              <span className="text-xs font-semibold text-slate-500 bg-slate-200 dark:bg-slate-800/80 px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700">{t('messagesCount', { count: m.messages.length })}</span>
             </summary>
             <div className="p-4 space-y-2 bg-slate-50 dark:bg-slate-900/60 border-t border-slate-300 dark:border-slate-700/50">
                {m.messages.map((sMsg, j) => renderMessage(sMsg, `${keyStr}-${j}`))}
@@ -102,19 +104,19 @@ const MessageList = memo(function MessageList({
         <div className="flex-1 relative space-y-1">
           <div className="flex items-center justify-between w-full">
             <div className="flex items-center gap-3">
-               <span className="font-semibold text-slate-800 dark:text-slate-200 text-sm">{m.role === 'user' ? (user?.nickname || user?.username || 'You') : 'Polyglot AI'}</span>
+               <span className="font-semibold text-slate-800 dark:text-slate-200 text-sm">{m.role === 'user' ? (user?.nickname || user?.username || t('you')) : t('polyglotAI')}</span>
                {m.role === 'user' && (m.grammar && m.grammar.replace(/[^a-zA-Z]/g, '').toUpperCase() !== 'PERFECT') && (
                  <button 
                    onClick={() => setInlineFeedbackPopup(m)}
                    className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/10 text-amber-700 dark:text-amber-400 rounded-full border border-amber-500/30 dark:border-amber-500/20 hover:bg-amber-500/20 transition-colors text-[10px] font-bold tracking-wide uppercase shadow-sm"
-                   title="View Feedback"
+                   title={t('viewFeedback')}
                  >
-                   <AlertTriangle size={12} /> Feedback
+                   <AlertTriangle size={12} /> {t('feedback')}
                  </button>
                )}
             </div>
             {showTokens && m.tokens && (
-               <span className="text-[10px] font-medium text-slate-400">Tokens: {m.tokens}</span>
+               <span className="text-[10px] font-medium text-slate-400">{t('tokensLabel')}: {m.tokens}</span>
             )}
           </div>
           

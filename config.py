@@ -5,7 +5,7 @@ import os
 API_KEY = "ollama" 
 
 # --- Language Definitions ---
-SUPPORTED_LANGUAGES = ["Japanese", "Spanish", "French", "Italian", "Chinese", "Korean"]
+SUPPORTED_LANGUAGES = ["Japanese", "Spanish", "French", "Italian", "Chinese", "Korean", "English"]
 JAPANESE_MODES = ["なし", "ふりがな", "かなのみ"]
 
 # --- Difficulty Settings ---
@@ -15,7 +15,8 @@ DIFFICULTY_SCALES = {
     "Korean": ["TOPIK 1 (Beginner)", "TOPIK 2 (Elementary)", "TOPIK 3 (Intermediate)", "TOPIK 4 (Pre-Advanced)", "TOPIK 5-6 (Advanced)"],
     "Spanish": ["A1 (Beginner)", "A2 (Elementary)", "B1 (Intermediate)", "B2 (Upper Intermediate)", "C1-C2 (Advanced)"],
     "French": ["A1 (Beginner)", "A2 (Elementary)", "B1 (Intermediate)", "B2 (Upper Intermediate)", "C1-C2 (Advanced)"],
-    "Italian": ["A1 (Beginner)", "A2 (Elementary)", "B1 (Intermediate)", "B2 (Upper Intermediate)", "C1-C2 (Advanced)"]
+    "Italian": ["A1 (Beginner)", "A2 (Elementary)", "B1 (Intermediate)", "B2 (Upper Intermediate)", "C1-C2 (Advanced)"],
+    "English": ["A1 (Beginner)", "A2 (Elementary)", "B1 (Intermediate)", "B2 (Upper Intermediate)", "C1-C2 (Advanced)"]
 }
 
 DIFFICULTY_PROMPT_MODIFIERS = {
@@ -42,7 +43,8 @@ SCENARIOS = {
             "French": ["Bienvenue ! Avez-vous choisi ?", "Bonjour, que désirez-vous ?", "Bonjour ! Vous avez fait votre choix ?"],
             "Italian": ["Benvenuto! Ha già deciso cosa ordinare?", "Buongiorno! Cosa vi porto?", "Salve, avete già scelto?"],
             "Chinese": ["欢迎光临！您点好菜了吗？", "您好，请问需要点什么？", "欢迎光临，想吃点什么？"],
-            "Korean": ["어서 오세요. 주문하시겠어요?", "어서 오세요. 무엇을 주문하시겠습니까?", "주문 도와드릴까요?"]
+            "Korean": ["어서 오세요. 주문하시겠어요?", "어서 오세요. 무엇을 주문하시겠습니까?", "주문 도와드릴까요?"],
+            "English": ["Welcome! Have you decided on your order?", "Hi there! What can I get for you today?", "Good evening! Are you ready to order?"]
         }
     },
     "Classroom": {
@@ -59,7 +61,8 @@ SCENARIOS = {
             "French": ["Je vous présente notre nouvel élève. Peux-tu te présenter ?", "Bonjour à tous, voici notre nouveau camarade. Vas-y, présente-toi.", "Voici un nouvel étudiant dans notre classe. Je te laisse te présenter."],
             "Italian": ["Vi presento il nuovo studente. Puoi presentarti, per favore?", "Classe, ecco il nostro nuovo compagno. Prego, presentati.", "Un caloroso benvenuto al nuovo alunno. Presentati pure alla classe."],
             "Chinese": ["给大家介绍一下新同学。请你做个自我介绍吧。", "这是我们班的新同学。请做一下自我介绍。", "大家欢迎新同学！请开始你的自我介绍。"],
-            "Korean": ["새로운 학생을 소개합니다. 자기소개 부탁해요.", "우리 반에 새로 온 친구예요. 자기소개 해볼까요?", "여러분, 새 친구가 왔어요. 자기소개 부탁합니다."]
+            "Korean": ["새로운 학생을 소개합니다. 자기소개 부탁해요.", "우리 반에 새로 온 친구예요. 자기소개 해볼까요?", "여러분, 새 친구가 왔어요. 자기소개 부탁합니다."],
+            "English": ["Everyone, we have a new student joining us today. Please introduce yourself!", "Class, please welcome our new classmate. Go ahead, introduce yourself.", "I'd like to introduce our new student. Please tell us a little about yourself!"]
         }
     },
     "Shopping": {
@@ -76,7 +79,8 @@ SCENARIOS = {
             "French": ["Bonjour ! Vous cherchez quelque chose en particulier ?", "Bienvenue ! Je peux vous aider ?", "Bonjour, avez-vous besoin d'aide avec les tailles ?"],
             "Italian": ["Buongiorno! Cerca qualcosa in particolare?", "Benvenuto, posso aiutarla?", "Salve, ha bisogno di aiuto per le taglie?"],
             "Chinese": ["欢迎光临！您在找什么特别的款式吗？", "您好，需要帮忙找尺码吗？", "欢迎光临，需要我为您推荐吗？"],
-            "Korean": ["어서 오세요. 찾으시는 거 있으신가요?", "어서 오세요. 사이즈 찾아드릴까요?", "무엇을 도와드릴까요?"]
+            "Korean": ["어서 오세요. 찾으시는 거 있으신가요?", "어서 오세요. 사이즈 찾아드릴까요?", "무엇을 도와드릴까요?"],
+            "English": ["Welcome in! Are you looking for anything in particular?", "Hi there! Let me know if you need help with any sizes.", "Welcome! Can I help you find anything today?"]
         }
     },
     "Directions": {
@@ -93,7 +97,8 @@ SCENARIOS = {
             "French": ["Ça va ? Vous êtes perdu ?", "Vous avez besoin d'aide ? Vous cherchez votre chemin ?", "Bonjour, je peux vous aider à trouver quelque chose ?"],
             "Italian": ["Tutto bene? Si è perso?", "Ha bisogno di aiuto? Sembra che si sia perso.", "Salve, cerca un posto in particolare?"],
             "Chinese": ["您好，迷路了吗？需要帮忙吗？", "您看起来好像迷路了，要去哪儿吗？", "你好，需要帮忙指路吗？"],
-            "Korean": ["무슨 일 있으신가요? 길을 잃으셨나요?", "도와드릴까요? 길을 찾고 계신가요?", "괜찮으세요? 어디 찾으시는 곳이라도?"]
+            "Korean": ["무슨 일 있으신가요? 길을 잃으셨나요?", "도와드릴까요? 길을 찾고 계신가요?", "괜찮으세요? 어디 찾으시는 곳이라도?"],
+            "English": ["Are you alright? You look a little lost.", "Do you need a hand finding something?", "Hi there, can I help you find your way?"]
         }
     },
     "Convenience Store": {
@@ -110,7 +115,8 @@ SCENARIOS = {
             "French": ["Bonjour. Avez-vous besoin d'un sac ?", "Bonjour, voulez-vous un sac en plastique ?", "Je vous donne un sac ?"],
             "Italian": ["Salve. Ha bisogno di un sacchetto?", "Buongiorno, vuole un sacchetto per la spesa?", "Le serve una busta?"],
             "Chinese": ["欢迎光临。请问需要塑料袋吗？", "您好，需要买个袋子吗？", "欢迎光临，请问要装袋吗？"],
-            "Korean": ["어서 오세요. 봉투 필요하신가요?", "어서 오세요. 담아드릴 봉투 드릴까요?", "봉투에 담아드릴까요?"]
+            "Korean": ["어서 오세요. 봉투 필요하신가요?", "어서 오세요. 담아드릴 봉투 드릴까요?", "봉투에 담아드릴까요?"],
+            "English": ["Hi there! Do you need a plastic bag for your items?", "Hello! Would you like a bag with that?", "Welcome! Will you be needing a bag today?"]
         }
     }
 }

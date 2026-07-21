@@ -4,6 +4,7 @@ import LanguageSelect from './LanguageSelect';
 import ChatUI from './ChatUI';
 import ErrorBoundary from './ErrorBoundary';
 import AdminDashboard from './AdminDashboard';
+import { I18nProvider } from './i18n';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -64,13 +65,16 @@ function App() {
 
   if (!user) {
     return (
-      <ErrorBoundary>
-        <Auth onLogin={(userData) => setUser(userData)} />
-      </ErrorBoundary>
+      <I18nProvider>
+        <ErrorBoundary>
+          <Auth onLogin={(userData) => setUser(userData)} />
+        </ErrorBoundary>
+      </I18nProvider>
     );
   }
 
   return (
+    <I18nProvider>
     <ErrorBoundary>
       {isAdminView && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-50 dark:bg-slate-900">
@@ -95,6 +99,7 @@ function App() {
         />
       )}
     </ErrorBoundary>
+    </I18nProvider>
   );
 }
 

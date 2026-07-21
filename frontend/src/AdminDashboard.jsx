@@ -298,6 +298,7 @@ export default function AdminDashboard({ user, onBack }) {
                       <option value="Spanish">Spanish</option>
                       <option value="French">French</option>
                       <option value="Italian">Italian</option>
+                      <option value="English">English</option>
                     </select>
                   </div>
                   

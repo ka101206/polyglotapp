@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { LogIn, UserPlus } from 'lucide-react';
+import { useTranslation } from './i18n';
 
 export default function Auth({ onLogin }) {
+  const { t } = useTranslation();
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -28,7 +30,7 @@ export default function Auth({ onLogin }) {
       const data = await response.json();
       
       if (!response.ok) {
-        throw new Error(data.detail || 'Authentication failed');
+        throw new Error(data.detail || t('authFailed'));
       }
 
       const gradients = [
@@ -62,28 +64,28 @@ export default function Auth({ onLogin }) {
             {isLogin ? <LogIn size={32} /> : <UserPlus size={32} />}
           </div>
           <h2 className="text-3xl font-bold text-black dark:text-white tracking-tight">
-            {isLogin ? 'Welcome back' : 'Create account'}
+            {isLogin ? t('welcomeBack') : t('createAccount')}
           </h2>
           <p className="text-slate-600 dark:text-slate-400 mt-2">
-            {isLogin ? 'Enter your details to access your dashboard' : 'Sign up to start mastering languages'}
+            {isLogin ? t('loginSubtitle') : t('signupSubtitle')}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Username</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{t('usernameLabel')}</label>
             <input
               type="text"
               required
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-black dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-              placeholder="Enter your username"
+              placeholder={t('enterUsername')}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Password</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{t('passwordLabel')}</label>
             <input
               type="password"
               required
@@ -104,7 +106,7 @@ export default function Auth({ onLogin }) {
                 className="h-5 w-5 rounded border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50"
               />
               <label htmlFor="isAdminCheckbox" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Register as Admin (B2B Dashboard)
+                {t('registerAsAdmin')}
               </label>
             </motion.div>
           )}
@@ -120,7 +122,7 @@ export default function Auth({ onLogin }) {
             disabled={loading}
             className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-black dark:text-white font-semibold py-3 px-4 rounded-xl shadow-lg shadow-blue-500/30 transform transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Sign Up')}
+            {loading ? t('processing') : (isLogin ? t('signIn') : t('signUp'))}
           </button>
         </form>
 
@@ -132,7 +134,7 @@ export default function Auth({ onLogin }) {
             }}
             className="text-slate-600 dark:text-slate-400 hover:text-black dark:text-white text-sm transition-colors"
           >
-            {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
+            {isLogin ? t('noAccountSignUp') : t('haveAccountSignIn')}
           </button>
         </div>
       </motion.div>

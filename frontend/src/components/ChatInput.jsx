@@ -1,5 +1,6 @@
 import React from 'react';
 import { Send, Mic, Square, Phone } from 'lucide-react';
+import { useTranslation } from '../i18n';
 
 export default function ChatInput({
   input,
@@ -22,14 +23,15 @@ export default function ChatInput({
   isConversationMode,
   setIsConversationMode
 }) {
+  const { t } = useTranslation();
   return (
     <div className="p-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shrink-0 z-10">
       {(wordBankPool.length > 0 || assembledWords.length > 0) && (
         <div className="mb-3 bg-slate-200 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700/50 rounded-xl p-3">
-          <div className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">Build your response</div>
+          <div className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">{t('buildResponse')}</div>
           <div className="min-h-[2.5rem] flex flex-wrap gap-1.5 items-center bg-slate-50 dark:bg-slate-900/50 border-b border-slate-300 dark:border-slate-700 p-2 rounded-t-lg mb-2">
             {assembledWords.length === 0 && (
-              <span className="text-slate-500 italic text-xs">Select words from the bank below...</span>
+              <span className="text-slate-500 italic text-xs">{t('selectWordsHint')}</span>
             )}
             {assembledWords.map((word, idx) => (
               <button
@@ -58,11 +60,11 @@ export default function ChatInput({
       <div className="flex items-center gap-2 mb-2">
 
         <div className="flex items-center gap-2 bg-slate-200 dark:bg-slate-800/50 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700/50 shrink-0 w-72">
-          <span className="text-[9px] font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap min-w-[65px]">Voice: {ttsSpeed.toFixed(1)}x</span>
+          <span className="text-[9px] font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap min-w-[65px]">{t('voiceSpeedLabel')}: {ttsSpeed.toFixed(1)}x</span>
           <input type="range" min="0.5" max="2.0" step="0.1" value={ttsSpeed} onChange={(e) => setTtsSpeed(parseFloat(e.target.value))} className="w-full accent-blue-500" />
         </div>
         <div className="flex items-center gap-2 bg-slate-200 dark:bg-slate-800/50 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700/50 shrink-0 w-72">
-          <span className="text-[9px] font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap min-w-[65px]">Replay: {replaySpeed.toFixed(1)}x</span>
+          <span className="text-[9px] font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap min-w-[65px]">{t('replaySpeedLabel')}: {replaySpeed.toFixed(1)}x</span>
           <input type="range" min="0.5" max="2.0" step="0.1" value={replaySpeed} onChange={(e) => setReplaySpeed(parseFloat(e.target.value))} className="w-full accent-blue-500" />
         </div>
 
@@ -89,7 +91,7 @@ export default function ChatInput({
             {!isRecording && !isAiSpeaking && !isThinking && (
               <span className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-slate-600"></span>
             )}
-            {isRecording ? 'Listening' : isAiSpeaking ? 'Speaking' : isThinking ? 'Thinking' : 'Idle'}
+            {isRecording ? t('statusListening') : isAiSpeaking ? t('statusSpeaking') : isThinking ? t('statusThinking') : t('statusIdle')}
           </div>
         </div>
       </div>
@@ -98,7 +100,7 @@ export default function ChatInput({
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Type your message..."
+          placeholder={t('typeMessage')}
           className="flex-1 bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-black dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-500"
         />
         <button
@@ -111,7 +113,7 @@ export default function ChatInput({
         <button
           type="button"
           onClick={toggleRecording}
-          title="Conversation Mode (Microphone)"
+          title={t('conversationModeTitle')}
           className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-lg shrink-0 ${
             isRecording 
               ? 'bg-red-500 hover:bg-red-600 text-white shadow-red-500/30 animate-pulse' 

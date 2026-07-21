@@ -153,6 +153,8 @@ def debug_dashboard():
 def strip_romaji(text: str) -> str:
     return re.sub(r'\s*\(([a-zA-Z][a-zA-Z0-9\s\-\x27,.!?]*)\)', '', text)
 
+_HAS_KANJI = re.compile(r"[一-龯]")
+
 def dedup_repeated_phrases(text: str) -> str:
     text = re.sub(r'\b(.{3,60}?)\s+\1\b', r'\1', text, flags=re.IGNORECASE)
     text = re.sub(r'\b(.{3,60}?)\s+\1\b', r'\1', text, flags=re.IGNORECASE)
@@ -219,7 +221,17 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
 
     async def send_audio(text, speed, language, gender="female"):
         """Generate and send audio for a single sentence."""
-        async for audio_bytes in tts_engine.generate_audio_stream(text, speed=speed, language=language, gender=gender):
+        tts_text = text
+        # Japanese: OpenJTalk (the TTS G2P) misreads rare kanji / proper nouns
+        # (e.g. 呪術廻戦 -> ...マワリセン). For sentences containing kanji, feed the
+        # LLM's context-aware hiragana reading to the TTS instead. Kana-only
+        # sentences read fine, so they skip the LLM. Only the audio is affected;
+        # the on-screen text/furigana is produced separately and unchanged.
+        if language == "Japanese" and _HAS_KANJI.search(text or ""):
+            kana = await ai_client.to_kana(text)
+            if kana:
+                tts_text = kana
+        async for audio_bytes in tts_engine.generate_audio_stream(tts_text, speed=speed, language=language, gender=gender):
             encoded = base64.b64encode(audio_bytes).decode()
             await websocket.send_json({"type": "audio", "data": encoded})
 
