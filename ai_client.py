@@ -29,6 +29,12 @@ class AIClient:
         self.word_bank_cache = {}
         self.kana_cache = {}  # Japanese text -> hiragana reading (for TTS)
 
+        # Durable, capped profile of the user (name, pets, job, preferences).
+        # Overwritten on refresh so it can never grow unbounded; injected cheaply
+        # into every reply so even LOW/balanced mode remembers key facts.
+        self.profile_memory = ""
+        self._bg_tasks = []
+
     # ---------- Shared helpers ----------
 
     # By splitting on commas as well as periods, we send smaller chunks to the TTS engine.
@@ -261,7 +267,12 @@ Rules:
 - Script: {lang['script']}"""
 
         if token_mode == "low":
-            system_prompt = f"Role: Native {target_language} speaker.\nRules: <30 words. Register: {register} ({lang[register]}). Script: {lang['script']}."
+            system_prompt = (
+                f"Role: Native {target_language} speaker texting a friend.\n"
+                f"- 1-2 short sentences, <30 words. Natural, idiomatic phrasing (e.g. \"steak\", not \"meat steak\").\n"
+                f"- React, agree, joke, or ask. Match the user's energy.\n"
+                f"- Register: {register} ({lang[register]}). Script: {lang['script']}."
+            )
         
         if target_language == "English":
             system_prompt += "\nCRITICAL: You MUST answer strictly in natural, idiomatic English. ONLY output English text."
@@ -289,7 +300,7 @@ Rules:
             system_prompt += f"\nDifficulty: {difficulty}. {diff_rules}"
 
             if user_name:
-                system_prompt += f"\n\n[USER INFO]\nThe user's name is: {user_name}\nCRITICAL: Output this name EXACTLY as written above — same characters, same script, no changes. Do NOT romanize it, do NOT transliterate it, do NOT convert it to another writing system, do NOT re-spell it. Write \"{user_name}\" verbatim every time you address the user. Do NOT ask the user what their name is."
+                system_prompt += f"\n[USER INFO] The user's name is \"{user_name}\". Write it verbatim (same characters/script); never romanize, transliterate, or re-spell it, and don't ask for their name."
 
             if self.conversation_memory:
                 system_prompt += f"\n\n[Previous context]\n{self.conversation_memory}"
@@ -300,6 +311,10 @@ Rules:
                 if notebook_words:
                     topics_str = ", ".join(notebook_words[:15])
                     system_prompt += f" For example, the user is interested in these topics: [{topics_str}]. Try asking about one of them!"
+
+        # Capped, durable user profile — cheap to inject, so even LOW mode remembers.
+        if self.profile_memory:
+            system_prompt += f"\n[Remember about the user] {self.profile_memory}"
 
         messages = [{"role": "system", "content": system_prompt}]
         messages.extend(self.conversation_history)
@@ -322,9 +337,16 @@ Rules:
                 self.conversation_history.append({"role": "user", "content": user_text})
                 self.conversation_history.append({"role": "assistant", "content": self._cleanup_text(full, target_language)})
                 
+                # Refresh the capped user profile every 3 turns (background, amortized).
+                # Snapshot user messages now, before any history truncation below.
+                if (len(self.conversation_history) // 2) % 3 == 0:
+                    snap = [m["content"] for m in self.conversation_history if m.get("role") == "user"][-8:]
+                    self._bg_tasks = [t for t in self._bg_tasks if not t.done()]
+                    self._bg_tasks.append(asyncio.create_task(self.update_profile_memory(snap)))
+
                 if token_mode == "low":
-                    if len(self.conversation_history) > 4:
-                        self.conversation_history = self.conversation_history[-4:]
+                    if len(self.conversation_history) > 6:
+                        self.conversation_history = self.conversation_history[-6:]
                 else:
                     # Compaction Layer (after 16 messages / 8 turns)
                     if len(self.conversation_history) > 16:
@@ -353,11 +375,40 @@ Rules:
                         or getattr(_m, "reasoning_content", None)
                         or "")).strip()
             if self.conversation_memory:
-                self.conversation_memory = self.conversation_memory + " " + summary
+                # Cap so the topic summary can't grow unbounded over long sessions.
+                self.conversation_memory = (self.conversation_memory + " " + summary)[-800:]
             else:
                 self.conversation_memory = summary
         except Exception as e:
             print(f"[Compaction Error] {e}", flush=True)
+
+    # Hard cap on the injected profile (~70 tokens) so per-turn cost stays bounded.
+    MAX_PROFILE_CHARS = 280
+
+    async def update_profile_memory(self, user_msgs):
+        """Re-summarize durable facts about the user (name, family, pets, job, home,
+        hobbies, strong likes/dislikes) into one compact, capped line. OVERWRITES the
+        previous note (never appends), so it cannot grow without bound. Background,
+        best-effort — failures are swallowed so chat is never affected."""
+        try:
+            convo = "\n".join(m for m in user_msgs if m)
+            if not convo.strip():
+                return
+            sys = ("Extract DURABLE facts about the user (name, family, pets, job, home, "
+                   "hobbies, strong likes/dislikes) from their messages. Merge with the "
+                   "current notes, dedupe, and output ONE compact line of at most 6 facts, "
+                   "semicolon-separated, e.g. 'name: Ken; dog: Max; likes: action movies'. "
+                   "Under 40 words. Omit anything transient. If nothing durable, output NONE.")
+            usr = f"Current notes: {self.profile_memory or '(none)'}\nUser messages:\n{convo}"
+            out = await self._complete(
+                [{"role": "system", "content": sys}, {"role": "user", "content": usr}],
+                temperature=0.0, max_tokens=80,
+            )
+            out = (out or "").strip()
+            if out and out.upper() != "NONE":
+                self.profile_memory = out[:self.MAX_PROFILE_CHARS]
+        except Exception as e:
+            print(f"[Profile Memory Error] {e}", flush=True)
 
     # ---------- Scenarios ----------
 
@@ -387,7 +438,7 @@ RULES:
         if token_mode == "low":
             system_prompt = (
                 f"Scenario: {scenario_dict['title']}. You are the {scenario_dict['ai_role']}. Goal: {scenario_dict['goal']}\n"
-                f"1. Speak 100% in {target_language} ONLY. Max 30 words. Stay in character.\n"
+                f"1. Speak 100% in {target_language} ONLY. Max 30 words. Stay in character. Sound like a true native — natural, idiomatic phrasing; match the user's tone.\n"
                 f"2. VERY IMPORTANT: The moment the user achieves the goal ({scenario_dict['goal']}), you MUST append the exact string \"[GOAL_REACHED]\" to the END of your reply. Do not forget!"
             )
 
@@ -401,7 +452,7 @@ RULES:
         system_prompt += f"\n7. Persona: {gender_rules}"
 
         if token_mode == "high" and user_name:
-            system_prompt += f"\n\n[USER INFO]\nThe user's name is: {user_name}\nCRITICAL: Output this name EXACTLY as written above — same characters, same script, no changes. Do NOT romanize it, do NOT transliterate it, do NOT convert it to another writing system, do NOT re-spell it. Write \"{user_name}\" verbatim every time you address the user. Do NOT ask the user what their name is."
+            system_prompt += f"\n[USER INFO] The user's name is \"{user_name}\". Write it verbatim (same characters/script); never romanize, transliterate, or re-spell it, and don't ask for their name."
 
         system_prompt += """
 
@@ -418,8 +469,8 @@ Output ONLY your conversational reply (and the [GOAL_REACHED] tag if the goal is
             if done and ok:
                 self.scenario_history.append({"role": "assistant", "content": self._cleanup_text(full, target_language)})
                 if token_mode == "low":
-                    if len(self.scenario_history) > 4:
-                        self.scenario_history = self.scenario_history[-4:]
+                    if len(self.scenario_history) > 6:
+                        self.scenario_history = self.scenario_history[-6:]
                 else:
                     if len(self.scenario_history) > 12:
                         self.scenario_history = self.scenario_history[-12:]
@@ -492,17 +543,39 @@ User: "안녕하세요" → PERFECT"""
 
     # ---------- Japanese reading for TTS ----------
 
+    @staticmethod
+    def _katakana_to_hiragana(s):
+        return "".join(chr(ord(c) - 0x60) if "ァ" <= c <= "ヶ" else c for c in s)
+
+    def _local_kana(self, text):
+        """Dictionary-grade hiragana reading via OpenJTalk (+ user dict). No LLM call.
+        Common words read correctly; rare kanji/proper nouns rely on jp_userdict.csv
+        (the same corrections the TTS uses). Returns hiragana or None."""
+        try:
+            import pyopenjtalk
+            try:
+                from jp_userdict import ensure_user_dict_loaded
+                ensure_user_dict_loaded()
+            except Exception:
+                pass
+            kata = (pyopenjtalk.g2p(text, kana=True) or "").replace(" ", "")
+            return self._katakana_to_hiragana(kata) if kata else None
+        except Exception:
+            return None
+
     async def to_kana(self, text):
-        """Convert Japanese text to its hiragana reading using the LLM (context-aware,
-        so it handles homographs, rare kanji, and proper nouns that OpenJTalk's TTS
-        dictionary misreads — e.g. 呪術廻戦 -> じゅじゅつかいせん). Cached. Returns the
-        hiragana string, or None if conversion looks unreliable (caller falls back
-        to the original text)."""
+        """Hiragana reading for TTS. Dictionary-first (OpenJTalk, zero tokens); falls
+        back to the context-aware LLM only if the local reading looks unreliable."""
         text = (text or "").strip()
         if not text:
             return None
         if text in self.kana_cache:
             return self.kana_cache[text]
+        # Dictionary-first: local OpenJTalk reading, no LLM tokens.
+        local = self._local_kana(text)
+        if local and re.search(r"[぀-ゟ]", local) and not re.search(r"[一-龯]", local):
+            self.kana_cache[text] = local
+            return local
         try:
             out = await self._complete(
                 [

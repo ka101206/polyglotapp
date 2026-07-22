@@ -246,6 +246,14 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
     async def fetch_grammar(user_text, lang, diff, scenario, token_mode="high"):
         if token_mode == "low":
             return # Skip grammar checks completely in low mode
+        # Grammar sampling: skip trivially short / interjection turns (sentence
+        # fragments are correct in conversation) — saves a full LLM call per turn.
+        _t = (user_text or "").strip()
+        # Substantive = 2+ words (any language) OR 4+ CJK/kana/hangul characters.
+        # Skips one-word interjections ("ok", "yeah", "うん", "응") that are always correct.
+        _substantive = (len(_t.split()) >= 2) or (len(re.findall(r"[一-龯ぁ-んァ-ヶ가-힣]", _t)) >= 4)
+        if not _substantive:
+            return
         history_msgs = ai_client.scenario_history[-4:] if scenario else ai_client.conversation_history[-4:]
         history_str = "\n".join([f"{m.get('role')}: {m.get('content')}" for m in history_msgs if m.get('role')])
         grammar, grammar_score, ok, weak_key = await ai_client.analyze_grammar(user_text, lang, diff, context_history=history_str, token_mode=token_mode)
@@ -356,7 +364,6 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
             scenario = payload.get("scenario")
             reading_mode = payload.get("reading_mode", "なし")
             req_speed = float(payload.get("speed", 1.0))
-            enable_grammar = payload.get("enable_grammar", True)
             enable_grammar = payload.get("enable_grammar", True)
             enable_word_bank = payload.get("enable_word_bank", True)
             req_gender = payload.get("gender", "female")
