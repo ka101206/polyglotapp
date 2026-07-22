@@ -34,12 +34,22 @@ class AIClient:
         # into every reply so even LOW/balanced mode remembers key facts.
         self.profile_memory = ""
         self._bg_tasks = []
+        self._turn_count = 0
 
     # ---------- Shared helpers ----------
 
     # By splitting on commas as well as periods, we send smaller chunks to the TTS engine.
     # This drastically reduces the "time to first audio" latency, making the app feel much faster!
     SENTENCE_TERMINATORS = ['。', '！', '？', '.', '!', '?', '、', ',']
+
+    # Compact difficulty hints for LOW mode (cheap; full modifiers live in config).
+    LOW_DIFFICULTY_HINTS = {
+        "Beginner": "very simple, basic vocabulary; short, easy sentences.",
+        "Elementary": "common everyday words; simple sentences.",
+        "Intermediate": "varied everyday vocabulary; moderately complex sentences.",
+        "Pre-Advanced": "broad vocabulary with some idioms; complex sentences.",
+        "Advanced": "natural native-level vocabulary, idioms, and full grammatical range.",
+    }
 
     def clear_history(self):
         self.conversation_history = []
@@ -257,7 +267,12 @@ class AIClient:
             "FORMAL": "formal",
         })
 
-        system_prompt = f"""Role: Native {target_language} speaker texting a friend. Casual chat.
+        # Relationship follows the user's tone: a casual friend, or a warmer, more
+        # respectful native speaker when they're being formal.
+        relationship = ("a close friend texting casually" if register == "CASUAL"
+                        else "a warm, polite native speaker chatting respectfully")
+
+        system_prompt = f"""Role: You are {relationship} — a real, opinionated native {target_language} speaker.
 
 Rules:
 - 1-2 short sentences, <30 words. Natural, idiomatic phrasing (e.g. "steak", not "meat steak").
@@ -268,7 +283,7 @@ Rules:
 
         if token_mode == "low":
             system_prompt = (
-                f"Role: Native {target_language} speaker texting a friend.\n"
+                f"Role: You are {relationship} — a real, opinionated native {target_language} speaker.\n"
                 f"- 1-2 short sentences, <30 words. Natural, idiomatic phrasing (e.g. \"steak\", not \"meat steak\").\n"
                 f"- React, agree, joke, or ask. Match the user's energy.\n"
                 f"- Register: {register} ({lang[register]}). Script: {lang['script']}."
@@ -287,16 +302,22 @@ Rules:
                 gender_rules += " When referring to yourself, use '私', 'うち', 'あたし', or '僕' (for 僕っこ)."
         
         system_prompt += f"\n- Persona: {gender_rules}"
+        system_prompt += "\n- Plain text only: never use emojis, emoticons, or kaomoji."
+        system_prompt += "\n- You are a real person with genuine opinions, tastes, and experiences. ALWAYS give a real answer or preference and keep the conversation going (add a natural follow-up). NEVER say you are an AI, that you have no preferences, or that you cannot answer."
+
+        # Difficulty calibration applies to BOTH modes — a beginner must never get
+        # advanced replies, even in low-token mode.
+        _bd = "Intermediate"
+        if "Beginner" in difficulty: _bd = "Beginner"
+        elif "Elementary" in difficulty: _bd = "Elementary"
+        elif "Pre-Advanced" in difficulty or "Upper Intermediate" in difficulty: _bd = "Pre-Advanced"
+        elif "Intermediate" in difficulty: _bd = "Intermediate"
+        elif "Advanced" in difficulty: _bd = "Advanced"
+        if token_mode == "low":
+            system_prompt += f"\n- Level ({difficulty}): {self.LOW_DIFFICULTY_HINTS[_bd]}"
 
         if token_mode == "high":
-            base_diff = "Intermediate"
-            if "Beginner" in difficulty: base_diff = "Beginner"
-            elif "Elementary" in difficulty: base_diff = "Elementary"
-            elif "Pre-Advanced" in difficulty or "Upper Intermediate" in difficulty: base_diff = "Pre-Advanced"
-            elif "Intermediate" in difficulty: base_diff = "Intermediate"
-            elif "Advanced" in difficulty: base_diff = "Advanced"
-            
-            diff_rules = config.DIFFICULTY_PROMPT_MODIFIERS.get(base_diff, config.DIFFICULTY_PROMPT_MODIFIERS["Intermediate"])
+            diff_rules = config.DIFFICULTY_PROMPT_MODIFIERS.get(_bd, config.DIFFICULTY_PROMPT_MODIFIERS["Intermediate"])
             system_prompt += f"\nDifficulty: {difficulty}. {diff_rules}"
 
             if user_name:
@@ -339,14 +360,17 @@ Rules:
                 
                 # Refresh the capped user profile every 3 turns (background, amortized).
                 # Snapshot user messages now, before any history truncation below.
-                if (len(self.conversation_history) // 2) % 3 == 0:
+                # Turn counter (not history length) so cadence is stable regardless
+                # of the sliding-window truncation below.
+                self._turn_count += 1
+                if self._turn_count % 3 == 0:
                     snap = [m["content"] for m in self.conversation_history if m.get("role") == "user"][-8:]
                     self._bg_tasks = [t for t in self._bg_tasks if not t.done()]
                     self._bg_tasks.append(asyncio.create_task(self.update_profile_memory(snap)))
 
                 if token_mode == "low":
-                    if len(self.conversation_history) > 6:
-                        self.conversation_history = self.conversation_history[-6:]
+                    if len(self.conversation_history) > 10:
+                        self.conversation_history = self.conversation_history[-10:]
                 else:
                     # Compaction Layer (after 16 messages / 8 turns)
                     if len(self.conversation_history) > 16:
@@ -441,6 +465,13 @@ RULES:
                 f"1. Speak 100% in {target_language} ONLY. Max 30 words. Stay in character. Sound like a true native — natural, idiomatic phrasing; match the user's tone.\n"
                 f"2. VERY IMPORTANT: The moment the user achieves the goal ({scenario_dict['goal']}), you MUST append the exact string \"[GOAL_REACHED]\" to the END of your reply. Do not forget!"
             )
+            _bd = "Intermediate"
+            if "Beginner" in difficulty: _bd = "Beginner"
+            elif "Elementary" in difficulty: _bd = "Elementary"
+            elif "Pre-Advanced" in difficulty or "Upper Intermediate" in difficulty: _bd = "Pre-Advanced"
+            elif "Intermediate" in difficulty: _bd = "Intermediate"
+            elif "Advanced" in difficulty: _bd = "Advanced"
+            system_prompt += f"\n3. Level ({difficulty}): {self.LOW_DIFFICULTY_HINTS[_bd]}"
 
         gender_rules = f"You are a {voice_gender}. Match your speaking style, tone, and self-referential pronouns to your gender ({voice_gender})."
         if target_language == "Japanese":
@@ -448,8 +479,10 @@ RULES:
                 gender_rules += " When referring to yourself, use '俺', '僕', or '私' (for formal)."
             else:
                 gender_rules += " When referring to yourself, use '私', 'うち', 'あたし', or '僕' (for 僕っこ)."
-        
+
         system_prompt += f"\n7. Persona: {gender_rules}"
+        system_prompt += "\n8. Plain text only: never use emojis, emoticons, or kaomoji."
+        system_prompt += "\n9. Stay fully in character: never mention being an AI or say you cannot answer — keep the interaction going in-role."
 
         if token_mode == "high" and user_name:
             system_prompt += f"\n[USER INFO] The user's name is \"{user_name}\". Write it verbatim (same characters/script); never romanize, transliterate, or re-spell it, and don't ask for their name."
@@ -469,8 +502,8 @@ Output ONLY your conversational reply (and the [GOAL_REACHED] tag if the goal is
             if done and ok:
                 self.scenario_history.append({"role": "assistant", "content": self._cleanup_text(full, target_language)})
                 if token_mode == "low":
-                    if len(self.scenario_history) > 6:
-                        self.scenario_history = self.scenario_history[-6:]
+                    if len(self.scenario_history) > 10:
+                        self.scenario_history = self.scenario_history[-10:]
                 else:
                     if len(self.scenario_history) > 12:
                         self.scenario_history = self.scenario_history[-12:]
