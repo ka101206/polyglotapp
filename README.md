@@ -4,15 +4,16 @@ A modern, full-stack AI language-learning web application. It features a React
 frontend and a FastAPI backend, leveraging a local LLM (via a vLLM/OpenAI-compatible
 endpoint) for conversation and neural Text-to-Speech (Style-Bert-VITS2, with Edge-TTS
 fallback) for ultra-realistic speech synthesis in Japanese, Chinese, Korean, Spanish,
-French, and Italian.
+French, Italian, and English.
 
 ## Features
 
-- **AI Conversation** — Chat with an AI tutor in your target language with automatic text-to-speech responses.
+- **AI Conversation** — Chat with an AI tutor in your target language with automatic text-to-speech responses. Practice languages: Japanese, Chinese, Korean, Spanish, French, Italian, and English. The tutor adapts its register (casual vs. polite) and difficulty to you, remembers key details about you across the conversation, and stays fully in character.
+- **Multilingual Interface (i18n)** — The entire UI is translatable across 7 languages (English, 日本語, Español, Français, Italiano, 中文, 한국어), independent of the language you're practicing.
 - **Interactive Scenarios** — Practice real-world situations (e.g., Ordering at a Restaurant, Asking for Directions) with guided AI interactions.
 - **Multi-Language TTS** — Natural Japanese speech via Style-Bert-VITS2 (Koharune Ami / JVNV voices), with Microsoft Edge-TTS covering the other languages.
 - **Word Dictionary & Translation** — Highlight any word or phrase in the chat to instantly see its translation and reading.
-- **Vocabulary Notebook (SRS)** — Save highlighted words to a personal notebook with spaced-repetition review. Readings are language-appropriate: **furigana** for Japanese, **pinyin** for Chinese, and **Latin-alphabet romanization** for Korean.
+- **Vocabulary Notebook (SRS)** — Save highlighted words to a personal notebook with spaced-repetition review. Readings are language-appropriate: **furigana** for Japanese, **pinyin** for Chinese, and **Latin-alphabet romanization** for Korean — each with a pronunciation annotation (Japanese **pitch accent**, computed dictionary-grade via OpenJTalk; Chinese **tone**; English **stress**; Romance-language **gender**).
 - **Grammar & Pronunciation Feedback** — Receive inline grammar corrections and pronunciation hints from the AI tutor.
 - **Replay Controls** — Replay full messages or partial highlighted text at adjustable speeds to practice listening.
 - **Speech-to-Text (STT)** — Hands-free voice-to-voice practice using browser microphone APIs.
