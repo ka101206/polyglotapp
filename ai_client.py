@@ -290,20 +290,19 @@ Rules:
             )
         
         if target_language == "English":
-            system_prompt += "\nCRITICAL: You MUST answer strictly in natural, idiomatic English. ONLY output English text."
+            system_prompt += "\n- Output ONLY natural, idiomatic English."
         else:
-            system_prompt += f"\nCRITICAL: You MUST answer strictly in {target_language}. Do NOT use English conversational fillers (like 'WELL', 'OH', etc.). ONLY output {target_language} text."
+            system_prompt += f"\n- Output ONLY {target_language} (no English fillers)."
 
-        gender_rules = f"You are a {voice_gender}. Match your speaking style, tone, and self-referential pronouns to your gender ({voice_gender})."
+        gender_rules = f"Speak as a {voice_gender} (match tone and self-reference)."
         if target_language == "Japanese":
             if voice_gender == "male":
                 gender_rules += " When referring to yourself, use '俺', '僕', or '私' (for formal)."
             else:
                 gender_rules += " When referring to yourself, use '私', 'うち', 'あたし', or '僕' (for 僕っこ)."
         
-        system_prompt += f"\n- Persona: {gender_rules}"
-        system_prompt += "\n- Plain text only: never use emojis, emoticons, or kaomoji."
-        system_prompt += "\n- You are a real person with genuine opinions, tastes, and experiences. ALWAYS give a real answer or preference and keep the conversation going (add a natural follow-up). NEVER say you are an AI, that you have no preferences, or that you cannot answer."
+        system_prompt += f"\n- Persona: {gender_rules} No emojis."
+        system_prompt += "\n- You're a real person with real opinions: always answer genuinely, add a follow-up, and never break character or say you're an AI."
 
         # Difficulty calibration applies to BOTH modes — a beginner must never get
         # advanced replies, even in low-token mode.
@@ -473,24 +472,20 @@ RULES:
             elif "Advanced" in difficulty: _bd = "Advanced"
             system_prompt += f"\n3. Level ({difficulty}): {self.LOW_DIFFICULTY_HINTS[_bd]}"
 
-        gender_rules = f"You are a {voice_gender}. Match your speaking style, tone, and self-referential pronouns to your gender ({voice_gender})."
+        gender_rules = f"Speak as a {voice_gender} (match tone and self-reference)."
         if target_language == "Japanese":
             if voice_gender == "male":
                 gender_rules += " When referring to yourself, use '俺', '僕', or '私' (for formal)."
             else:
                 gender_rules += " When referring to yourself, use '私', 'うち', 'あたし', or '僕' (for 僕っこ)."
 
-        system_prompt += f"\n7. Persona: {gender_rules}"
-        system_prompt += "\n8. Plain text only: never use emojis, emoticons, or kaomoji."
-        system_prompt += "\n9. Stay fully in character: never mention being an AI or say you cannot answer — keep the interaction going in-role."
+        system_prompt += f"\n7. Persona: {gender_rules} No emojis."
+        system_prompt += "\n8. Stay in character; never mention being an AI or refuse — keep the interaction going in-role."
 
         if token_mode == "high" and user_name:
             system_prompt += f"\n[USER INFO] The user's name is \"{user_name}\". Write it verbatim (same characters/script); never romanize, transliterate, or re-spell it, and don't ask for their name."
 
-        system_prompt += """
-
-CRITICAL OUTPUT FORMATTING:
-Output ONLY your conversational reply (and the [GOAL_REACHED] tag if the goal is met). DO NOT output any thinking process, analysis, meta-commentary, or prefixes like 'Here is a thinking process'. Just output the raw conversational reply text directly."""
+        system_prompt += "\n\nOutput ONLY your reply (plus [GOAL_REACHED] if the goal is met) — no thinking, analysis, or prefixes."
 
         messages = [{"role": "system", "content": system_prompt}]
         messages.extend(self.scenario_history)
