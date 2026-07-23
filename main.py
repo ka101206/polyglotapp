@@ -277,6 +277,12 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
             payload = json.loads(data)
             msg_type = payload.get("type", "chat")
 
+            # --- Keepalive ping (frontend sends one every 30s to keep the
+            # connection alive through Cloudflare/nginx idle timeouts) ---
+            if msg_type == "ping":
+                await websocket.send_json({"type": "pong"})
+                continue
+
             # --- Tutor Chat ---
             if msg_type == "tutor_chat":
                 question = payload.get("question", "")

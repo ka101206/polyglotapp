@@ -9,7 +9,11 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
   const [isTTSWarmingUp, setIsTTSWarmingUp] = useState(false);
   
   const ws = useRef(null);
-  
+  // Keepalive timer. Cloudflare (and nginx) drop idle WebSockets after ~100s /
+  // 60s, which kills conversation mode during a pause. A periodic ping keeps the
+  // connection warm end-to-end.
+  const heartbeatRef = useRef(null);
+
   const ttsSpeedRef = useRef(ttsSpeed);
   useEffect(() => { ttsSpeedRef.current = ttsSpeed; }, [ttsSpeed]);
 
@@ -80,6 +84,7 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
 
       socket.onmessage = (event) => {
         const data = JSON.parse(event.data);
+        if (data.type === 'pong') return; // keepalive ack — ignore
         setIsThinking(false);
         
         if (data.type === 'scenario_start') {
@@ -221,6 +226,7 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
         console.warn("WebSocket closed:", event.code, event.reason);
         isAudioDone = true;
         setIsAiSpeaking(false);
+        if (heartbeatRef.current) clearInterval(heartbeatRef.current);
         if (ws.current === socket) ws.current = null;
         reconnectTimeout = setTimeout(() => {
           console.log("Attempting to reconnect...");
@@ -234,6 +240,13 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
 
       socket.onopen = () => {
         console.log("WebSocket connected successfully");
+        // Send a keepalive ping every 30s (well under Cloudflare's ~100s idle cutoff).
+        if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+        heartbeatRef.current = setInterval(() => {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: 'ping' }));
+          }
+        }, 30000);
         // No language selected (e.g. admin view) — don't warm up TTS.
         if (!language) return;
         setIsTTSWarmingUp(true);
@@ -245,6 +258,7 @@ export default function useChatWebSocket(user_id, language, difficulty, readingM
 
     return () => {
       clearTimeout(reconnectTimeout);
+      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
       if (ws.current) {
         ws.current.onclose = null;
         ws.current.close();

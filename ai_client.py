@@ -17,6 +17,15 @@ class AIClient:
             self.client = AsyncOpenAI(base_url=vllm_url, api_key=api_key)
             self.model = os.environ.get("AI_MODEL", model_override or "Qwen/Qwen3.5-9B")
 
+        # vLLM-only knob that suppresses Qwen "thinking" output. Hosted OpenAI-
+        # compatible APIs (OpenRouter, OpenAI) don't understand chat_template_kwargs,
+        # so only send it when talking to a local vLLM endpoint. On OpenRouter, pick
+        # a non-reasoning model instead (or use its `reasoning` param).
+        if vllm_url == "openai" or "openrouter.ai" in vllm_url:
+            self._extra_body = {}
+        else:
+            self._extra_body = {"chat_template_kwargs": {"enable_thinking": False}}
+
         self.conversation_history = []
         self.scenario_history = []
         
@@ -116,7 +125,7 @@ class AIClient:
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
-            extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+            extra_body=self._extra_body,
         )
         msg = response.choices[0].message
         # With thinking disabled, some vLLM reasoning parsers still route the
@@ -137,7 +146,7 @@ class AIClient:
                 max_tokens=max_tokens,
                 stream=True,
                 stream_options={"include_usage": True},
-                extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+                extra_body=self._extra_body,
             )
 
             full_text = ""
@@ -390,7 +399,7 @@ Rules:
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,
                 max_tokens=150,
-                extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+                extra_body=self._extra_body,
             )
             _m = resp.choices[0].message
             summary = ((_m.content
