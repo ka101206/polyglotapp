@@ -106,6 +106,25 @@ services:
       - polyglot-spark
     restart: unless-stopped
 
+  # Cloudflare Tunnel — publishes the app on the internet from a home/NAT server
+  # with no port forwarding and no exposed home IP. cloudflared dials OUT to
+  # Cloudflare; the public hostname -> service mapping is configured in the
+  # Cloudflare Zero Trust dashboard (point it at http://proxy:80 — same Docker
+  # network, so no host ports are needed). See DEPLOY.md "Home server" section.
+  # Only starts when you enable the "tunnel" profile (see deploy steps).
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: polyglot-spark-cloudflared
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${POLYGLOT_TUNNEL_TOKEN:-}
+    depends_on:
+      - proxy
+    networks:
+      - polyglot-spark
+    restart: unless-stopped
+
 
 
 
