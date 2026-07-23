@@ -72,6 +72,18 @@ The site is world-reachable with an OpenRouter-billed backend and CORS `*`:
 - Consider Cloudflare **WAF / rate-limiting rules** and optionally **Access** if
   you want a login gate during beta.
 
+## Switching the LLM model (at will, no restart)
+The active model lives in **`llm_config.json`** (bind-mounted into the backend).
+To change it, edit the file on the server and save — the app re-reads it live:
+```bash
+# on the VPS, in the project dir
+nano llm_config.json          # set "model" to any OpenRouter slug, save
+curl -s localhost:18082/api/llm/model   # confirm the active model changed
+```
+No restart, no rebuild. `available` in that file is just a reference list of
+vetted picks. If the file is missing or the model is blank, it falls back to
+`POLYGLOT_AI_MODEL` from `.env`.
+
 ## Updating later
 ```bash
 git pull

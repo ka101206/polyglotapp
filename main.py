@@ -83,6 +83,13 @@ class UserUpdateRequest(BaseModel):
     avatar: str | None = None
     nickname: str | None = None
 
+@app.get("/api/llm/model")
+def get_llm_model():
+    """Read-only: the model in use right now + the reference list from
+    llm_config.json. Use it to confirm a hot-reload edit took effect."""
+    from llm_config import get_config
+    return {"active_model": ai_client.model, "config": get_config()}
+
 @app.post("/auth/register", response_model=AuthResponse)
 def register(req: AuthRequest, db: Session = Depends(get_db)):
     if db.query(User).filter(User.username == req.username).first():

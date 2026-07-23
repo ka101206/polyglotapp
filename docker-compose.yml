@@ -41,6 +41,10 @@ services:
       - "${POLYGLOT_BACKEND_PORT:-18082}:8081"
     # TTS models are baked into the image (see backend.Dockerfile), so no
     # model volume is mounted here — an empty volume would shadow them.
+    # Bind-mount the LLM model selector so it hot-reloads on host edits (change
+    # the active model at will by editing this file — no restart needed).
+    volumes:
+      - ./llm_config.json:/app/llm_config.json
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

@@ -11,11 +11,11 @@ class AIClient:
 
         if vllm_url == "openai":
             self.client = AsyncOpenAI(api_key=config.API_KEY)
-            self.model = model_override or "gpt-4o-mini"
+            self._fallback_model = model_override or "gpt-4o-mini"
         else:
             api_key = os.environ.get("OPENAI_API_KEY", "dummy_key_for_vllm")
             self.client = AsyncOpenAI(base_url=vllm_url, api_key=api_key)
-            self.model = os.environ.get("AI_MODEL", model_override or "Qwen/Qwen3.5-9B")
+            self._fallback_model = os.environ.get("AI_MODEL", model_override or "Qwen/Qwen3.5-9B")
 
         # vLLM-only knob that suppresses Qwen "thinking" output. Hosted OpenAI-
         # compatible APIs (OpenRouter, OpenAI) don't understand chat_template_kwargs,
@@ -117,6 +117,14 @@ class AIClient:
         reply = " ".join(cleaned)
         reply = re.sub(r'^[。・•\-\*]\s*', '', reply)
         return reply.strip()
+
+    @property
+    def model(self):
+        """The model to use right now, read live from llm_config.json so it can
+        be changed at will without a restart. Falls back to the env/AI_MODEL
+        value if the config file is missing or unset."""
+        import llm_config
+        return llm_config.get_active_model(default=self._fallback_model)
 
     async def _complete(self, messages, temperature=0.2, max_tokens=60):
         """Non-streaming completion. Returns the text content."""
